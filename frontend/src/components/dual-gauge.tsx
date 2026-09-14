@@ -116,7 +116,7 @@ function Gauge({ value, label, sublabel, testID, onSettle, delay = 0 }: GaugePro
             animatedProps={animatedProps}
           />
         </Svg>
-        <View style={styles.center} pointerEvents="none">
+        <View style={[styles.center, { pointerEvents: "none" }]}>
           <Text style={[styles.score, { color: target }]} testID={`${testID}-value`}>
             {displayNumber}
           </Text>

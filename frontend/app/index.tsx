@@ -20,8 +20,9 @@ import * as Haptics from "expo-haptics";
 
 import { colors, radius, spacing } from "@/src/theme";
 import { analysisStore } from "@/src/analysis-store";
+import { VoiceRecorder } from "@/src/components/voice-recorder";
 
-type Mode = "text" | "image";
+type Mode = "text" | "image" | "voice";
 
 export default function Home() {
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function Home() {
   };
 
   const canAnalyze =
-    (mode === "text" && transcript.trim().length > 10) ||
+    ((mode === "text" || mode === "voice") && transcript.trim().length > 10) ||
     (mode === "image" && images.length > 0);
 
   const analyzeNow = async () => {
@@ -76,11 +77,14 @@ export default function Home() {
     const nameA = personA.trim() || "Person A";
     const nameB = personB.trim() || "Person B";
 
+    // Voice mode reuses the text analyse path (transcript is already in state).
+    const effectiveMode: "text" | "image" = mode === "image" ? "image" : "text";
+
     try {
       const body =
-        mode === "text"
-          ? { mode, text: transcript.trim(), person_a_name: nameA, person_b_name: nameB }
-          : { mode, images_base64: images.map((i) => i.base64), person_a_name: nameA, person_b_name: nameB };
+        effectiveMode === "text"
+          ? { mode: "text", text: transcript.trim(), person_a_name: nameA, person_b_name: nameB }
+          : { mode: "image", images_base64: images.map((i) => i.base64), person_a_name: nameA, person_b_name: nameB };
 
       const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/analyze`, {
         method: "POST",
@@ -96,8 +100,9 @@ export default function Home() {
         result,
         personAName: nameA,
         personBName: nameB,
-        sourceMode: mode,
-        sourceTextPreview: mode === "text" ? transcript.trim().slice(0, 240) : `${images.length} screenshot(s)`,
+        sourceMode: effectiveMode,
+        sourceTextPreview:
+          effectiveMode === "text" ? transcript.trim().slice(0, 240) : `${images.length} screenshot(s)`,
         savedId: null,
       });
       router.push("/scorecard");
@@ -161,7 +166,7 @@ export default function Home() {
                 color={mode === "text" ? colors.onBrandPrimary : colors.muted}
               />
               <Text style={[styles.segmentText, mode === "text" && styles.segmentTextActive]}>
-                Paste Transcript
+                Paste
               </Text>
             </Pressable>
             <Pressable
@@ -175,7 +180,21 @@ export default function Home() {
                 color={mode === "image" ? colors.onBrandPrimary : colors.muted}
               />
               <Text style={[styles.segmentText, mode === "image" && styles.segmentTextActive]}>
-                Upload Screenshots
+                Screenshots
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setMode("voice")}
+              style={[styles.segmentBtn, mode === "voice" && styles.segmentBtnActive]}
+              testID="mode-voice"
+            >
+              <Ionicons
+                name="mic-outline"
+                size={16}
+                color={mode === "voice" ? colors.onBrandPrimary : colors.muted}
+              />
+              <Text style={[styles.segmentText, mode === "voice" && styles.segmentTextActive]}>
+                Voice
               </Text>
             </Pressable>
           </View>
@@ -223,6 +242,32 @@ export default function Home() {
                 testID="input-transcript"
               />
               <Text style={styles.charCount}>{transcript.length} chars</Text>
+            </View>
+          ) : mode === "voice" ? (
+            <View style={{ gap: spacing.md }}>
+              <VoiceRecorder
+                onTranscript={(text) => {
+                  const cleaned = text.trim();
+                  setTranscript(cleaned);
+                  if (cleaned.length > 0) {
+                    setMode("text");
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                  }
+                }}
+              />
+              {transcript.trim().length > 0 ? (
+                <View style={styles.textCard}>
+                  <Text style={styles.helpText}>Previous transcription (editable):</Text>
+                  <TextInput
+                    style={[styles.textArea, { minHeight: 140 }]}
+                    value={transcript}
+                    onChangeText={setTranscript}
+                    multiline
+                    textAlignVertical="top"
+                    testID="voice-transcript-preview"
+                  />
+                </View>
+              ) : null}
             </View>
           ) : (
             <View style={styles.uploadCard}>

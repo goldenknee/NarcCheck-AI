@@ -101,9 +101,14 @@ class TestHistory:
     created_id = None
 
     def test_save_history(self, sess):
-        result = getattr(pytest, "analysis_text_result", None)
-        if not result:
-            pytest.skip("analyze text did not produce result")
+        # Build a self-contained result payload so this test class can run on its own
+        # xdist worker (loadscope splits classes across workers, breaking module-level state).
+        result = getattr(pytest, "analysis_text_result", None) or {
+            "person_a": {"name": "Alex", "narcissism_score": 72, "key_traits_detected": ["Gaslighting"], "notable_quotes": ["You always twist my words"]},
+            "person_b": {"name": "Sam", "narcissism_score": 12, "key_traits_detected": [], "notable_quotes": []},
+            "verdict": "Alex exhibited strong narcissistic tactics.",
+            "breakdown": "Gaslighting and DARVO observed.",
+        }
         payload = {
             "person_a_name": "Alex",
             "person_b_name": "Sam",

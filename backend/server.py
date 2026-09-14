@@ -1,13 +1,15 @@
 import os
+import io
 import json
 import uuid
 import logging
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Literal
 
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -15,6 +17,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from emergentintegrations.llm.openai.speech_to_text import OpenAISpeechToText
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -215,6 +218,53 @@ async def root():
 @api_router.post("/analyze", response_model=AnalysisResult)
 async def analyze(req: AnalyzeRequest):
     return await _run_analysis(req)
+
+
+ALLOWED_AUDIO_EXTS = {"mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm"}
+
+
+@api_router.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY not configured")
+
+    filename = file.filename or "audio.m4a"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "m4a"
+    if ext not in ALLOWED_AUDIO_EXTS:
+        ext = "m4a"
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio too large (max 25 MB)")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+    try:
+        tmp.write(data)
+        tmp.flush()
+        tmp.close()
+        stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
+        try:
+            with open(tmp.name, "rb") as fh:
+                resp = await stt.transcribe(file=fh, model="whisper-1", response_format="json")
+        except Exception as e:
+            logging.exception("Whisper transcription failed")
+            raise HTTPException(status_code=502, detail=f"Transcription failed: {e}")
+
+        text = ""
+        if isinstance(resp, str):
+            text = resp
+        elif hasattr(resp, "text"):
+            text = resp.text or ""
+        elif isinstance(resp, dict):
+            text = resp.get("text", "") or ""
+        return {"text": text.strip()}
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
 
 
 @api_router.post("/history", response_model=HistoryItem)

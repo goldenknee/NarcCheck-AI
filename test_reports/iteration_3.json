@@ -1,0 +1,46 @@
+{
+  "summary": "Voice Notes feature tested. Backend /api/transcribe passes all 4 required tests: WAV multipart returns 200 with {text: str}; real gTTS speech clip transcribed to non-empty text containing expected keywords ('twist words'); empty body -> 400; oversize (>25 MB) -> 413. All existing endpoints (POST /api/analyze text+image, POST/GET/DELETE /api/history) still pass. Total 12/12 pytest cases green. Frontend: 3-tab segment (Paste/Screenshots/Voice) renders correctly on mobile viewport; tapping Voice reveals the voice-web-unavailable fallback card with fully readable colors (title #fafafa on #18181b background, body #a1a1aa — high contrast). Paste -> Analyse -> Scorecard end-to-end verified (scorecard rendered with correct dual gauges and verdict). The Save-to-History regression from iteration_2 (react-native-svg `origin` prop causing 'Invalid DOM property transform-origin' error and spawning an Expo LogBox that intercepts save-btn taps) is STILL PRESENT and blocks the final Save step on web preview — the main agent's iteration_2 action item was not applied.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "dual-gauge.tsx <Circle origin=...>", "issue": "STILL UNRESOLVED from iteration_2: `origin` string prop on <Circle>/<AnimatedCircle> forwards as DOM attribute `transform-origin` -> React console.error -> Expo LogBox overlay covers the sticky CTA on /scorecard, intercepting Save/Share taps on web preview. Save-to-History flow could not be completed on web (history remained empty after tap).", "testID": "save-btn", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Paste -> Analyse -> Save -> History (web preview)", "issue": "Save button tap does not persist to /api/history because the react-native-svg `transform-origin` warning triggers an Expo LogBox overlay that captures pointer events on the sticky CTA bar. Native platforms unaffected. Save button IS present (testID visible) and reachable — only the tap event is intercepted.", "affected_testIDs": ["save-btn"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "react-native-svg Circle (dual-gauge.tsx)", "issue": "`origin={`${SIZE/2}, ${SIZE/2}`}` prop is not web-safe. Replace with `originX={SIZE/2} originY={SIZE/2}` (or wrap in a rotated <G>) to eliminate the DOM warning. Reference: /app/frontend/src/components/dual-gauge.tsx (both <Circle> and <AnimatedCircle> occurrences)."},
+      {"component": "Deprecation: pointerEvents prop", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non-blocking but should be migrated. Likely inside VoiceRecorder's <Animated.View pointerEvents=\"none\"> and possibly other components — move to style={{ pointerEvents: 'none' }}."}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_3.json",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/transcribe_results.xml",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_transcribe.py"
+  ],
+  "action_items": [
+    "Fix /app/frontend/src/components/dual-gauge.tsx: change `origin={`${SIZE/2}, ${SIZE/2}`}` to `originX={SIZE/2} originY={SIZE/2}` on both <Circle> and <AnimatedCircle>. This clears the LogBox and unblocks Save-to-History on web preview. (Repeat of iteration_2 action item — not applied yet.)",
+    "Migrate `pointerEvents=\"none\"` prop to `style={{ pointerEvents: 'none' }}` in /app/frontend/src/components/voice-recorder.tsx line 163 (Animated.View) and anywhere else it appears, to remove the RN 0.74+ deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py `transcribe`: correctly guards empty (400) and oversize (413), whitelists extensions, and cleans up temp file in finally. Solid.",
+    "backend/server.py: `transcribe` uses tempfile + `open(...,'rb')`. Fine, though `stt.transcribe(file=data, ...)` might also work with bytes and skip disk IO — optional optimisation.",
+    "voice-recorder.tsx: Uses expo-audio (current) — GOOD, not the deprecated expo-av. Timer cleanup on unmount is correct. Uses useSharedValue and cancels animation on cleanup. Nice.",
+    "voice-recorder.tsx web fallback: colors verified contrast-legible (WCAG AA-ish: white on very-dark card).",
+    "index.tsx: Voice mode reuses text-mode analyse path by auto-switching to `text` after successful transcription and pre-filling the transcript — matches spec exactly. `canAnalyze` covers voice via the text-branch check.",
+    "backend_test.py TestHistory.test_save_history now runs standalone (no reliance on cross-worker pytest module state) — needed because xdist loadscope splits classes across workers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_transcribe.py (new — 4 tests for /api/transcribe)",
+    "/app/backend/tests/backend_test.py (made test_save_history self-contained so it works under xdist loadscope)"
+  ],
+  "success_rate": {"backend": "100% (12/12: 4 new transcribe + 8 regression)", "frontend": "Voice UI 100% verified (3-tab, fallback render, colors); Paste-Analyse-Scorecard 100%; Save-to-History still blocked on web by pre-existing LogBox bug"},
+  "seed_data_creation": "gTTS-generated in-memory MP3 speech clip is used for the real-transcription test (built via `gTTS('You always twist my words...').write_to_fp(buf)`), no persistent artefacts. History save attempted on web but did not persist due to the LogBox tap-intercept bug.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend transcribe endpoint fully verified — no regressions expected. Frontend Voice tab is intentionally read-only on web (fallback card) per spec; on-device recording can only be tested via Expo Go. The one open bug (react-native-svg `origin` prop -> LogBox overlay blocking scorecard Save/Share taps on web) is a REPEAT of iteration_2's finding and was not fixed. To fully clear the E2E Paste-flow on web, apply the two-line change in dual-gauge.tsx: `originX={SIZE/2} originY={SIZE/2}` on both circles. `EXPO_PUBLIC_BACKEND_URL` env var must be exported before running pytest (frontend/.env is not auto-loaded for backend tests). Run: `EXPO_PUBLIC_BACKEND_URL=$(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env | cut -d= -f2) pytest /app/backend/tests/ -v`.",
+  "rca_of_issue": "Save-to-History on web: root cause is unchanged from iteration_2. react-native-svg-web forwards the string `origin` prop verbatim as the DOM attribute `transform-origin`; React 19 flags this as an invalid DOM property and calls `console.error`, which Expo's LogBox surfaces as a bottom-of-screen overlay. That overlay swallows pointer events on the sticky CTA in /scorecard, so the Save tap never reaches the Pressable. Reproduction: navigate to /scorecard on web -> observe red toast -> tap Save -> body no longer contains 'Saved' and GET /api/history returns []. Mitigation: replace `origin` with `originX`/`originY` numeric props on both Circle/AnimatedCircle in dual-gauge.tsx."
+}

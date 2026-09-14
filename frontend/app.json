@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.narcanalyzer.cslz18",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Analyse argument screenshots you select"
+        "NSPhotoLibraryUsageDescription": "Analyse argument screenshots you select",
+        "NSMicrophoneUsageDescription": "Record voice notes of arguments to analyse"
       }
     },
     "android": {
@@ -20,7 +21,10 @@
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.narcanalyzer.cslz18",
-      "permissions": ["READ_MEDIA_IMAGES"]
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -47,6 +51,12 @@
         "expo-image-picker",
         {
           "photosPermission": "Analyse argument screenshots you select"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Record voice notes of arguments to analyse"
         }
       ],
       "@react-native-vector-icons/ionicons"
