@@ -1,0 +1,153 @@
+{
+  "app_name": "Narc",
+  "personality": "7 Dark-First Utility with 1 iOS-Native Clean structure",
+  "personality_one_liner": "A sleek, forensic, high-contrast command center that feels like an investigative tool uncovering hidden truths.",
+  "color": {
+    "surface": "#09090B",
+    "onSurface": "#FAFAFA",
+    "surfaceSecondary": "#18181B",
+    "onSurfaceSecondary": "#F4F4F5",
+    "surfaceTertiary": "#27272A",
+    "onSurfaceTertiary": "#E4E4E7",
+    "surfaceInverse": "#FAFAFA",
+    "onSurfaceInverse": "#09090B",
+    "brand": "#DC2626",
+    "onBrand": "#FAFAFA",
+    "brandPrimary": "#DC2626",
+    "onBrandPrimary": "#FAFAFA",
+    "brandSecondary": "#F59E0B",
+    "onBrandSecondary": "#18181B",
+    "brandTertiary": "#7F1D1D",
+    "onBrandTertiary": "#FECACA",
+    "success": "#16A34A",
+    "onSuccess": "#F0FDF4",
+    "warning": "#D97706",
+    "onWarning": "#FFFBEB",
+    "error": "#B91C1C",
+    "onError": "#FEF2F2",
+    "border": "#27272A",
+    "borderStrong": "#3F3F46",
+    "divider": "#27272A",
+    "muted": "#A1A1AA"
+  },
+  "typography": {
+    "displayFontFamily": "Geist",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing for readability, but tight modular grouping for data metrics (gauges, scores). Use safe areas strictly.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "stack_only",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use blur on the bottom sticky action areas (Save/Share) when content scrolls behind.",
+      "Use blur on sticky headers in the Scorecard screen."
+    ],
+    "dont's": [
+      "Do not blur metric cards or gauge backgrounds; keep them solid for maximum contrast."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home/Intake",
+      "purpose": "Primary entry point to either upload screenshots or paste a transcript for analysis.",
+      "states": {
+        "loading": "Loading state handled during the transition to Analysis Pipeline.",
+        "empty": "Default state shows two massive, clear intake zones: 'Upload Screenshots' and 'Paste Transcript'.",
+        "error": "Toast or inline alert if text/image is unreadable."
+      },
+      "layout": "Use a segmented control or two large touch targets (surfaceSecondary cards) for Intake methods. Keep a sticky primary CTA ('Analyze') at the bottom once input is provided."
+    },
+    {
+      "name": "Analysis Pipeline",
+      "purpose": "A cinematic loading screen that creates anticipation while the AI 'analyzes' the conversation.",
+      "states": {
+        "loading": "Radar scanning animation or pulsating abstract rings. Text updates rapidly ('Scanning for gaslighting...', 'Evaluating tone...', 'Calculating divergence...').",
+        "empty": "N/A",
+        "error": "Shows clear error message with a 'Retry' button if API fails."
+      },
+      "layout": "Full-screen center-aligned loading animation. Use the 'radar scanning abstract dark' background image with a gradient scrim."
+    },
+    {
+      "name": "Scorecard Results",
+      "purpose": "The forensic breakdown of the conversation, revealing narcissism scores and specific manipulative tactics.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Top section: Dual side-by-side gauge meters comparing Person A vs Person B. Gauges use brandPrimary (Red) for high scores, brandSecondary (Amber) for medium. Middle section: 'Dominant Traits' presented as high-contrast pill callouts (brandTertiary bg with onBrandTertiary text). Bottom section: Collapsible 'Notable Quotes' cards and a chronological breakdown. Sticky bottom action bar for 'Save to History' and 'Export/Share' using glassmorphism."
+    },
+    {
+      "name": "History",
+      "purpose": "Archive of past analyses, listed chronologically.",
+      "states": {
+        "loading": "Skeleton loaders matching the list row structure.",
+        "empty": "Illustration or abstract dark graphic with 'No analyses yet.'",
+        "error": "Standard error state with retry."
+      },
+      "layout": "Standard list view using surfaceSecondary for rows. Each row displays the two names, the highest score, and the date."
+    }
+  ],
+  "images": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1578662996442-48f60103fc96?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWJzdHJhY3QlMjBzbGVlayUyMHRleHR1cmV8ZW58MHx8fHwxNzg5NDAzMDI4fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Sleek dark abstract texture"
+    },
+    "loading_radar": {
+      "url": "https://images.unsplash.com/photo-1524438358316-594d46d2435a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxyYWRhciUyMHNjYW5uaW5nJTIwYWJzdHJhY3QlMjBkYXJrfGVufDB8fHx8MTc4OTQwMzAyOHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Radar scanning animation background"
+    }
+  },
+  "haptics": {
+    "gauge_fill": "impactLight (trigger sequentially as gauge animates)",
+    "score_reveal": "impactHeavy (trigger when final score hits)",
+    "trait_expand": "impactLight (trigger when opening collapsible breakdowns)",
+    "primary_cta": "impactMedium",
+    "tab_switch": "selection"
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the dark mode palette. Do not introduce ANY blues, purples, or indigos.",
+    "Implement the dual gauge meters using SVG or Reanimated for the Scorecard screen. The meters should animate from 0 to the final score on mount.",
+    "Ensure haptics are tied precisely to the gauge animation (e.g., ticking up) and culminate in a heavy impact when the final score is revealed.",
+    "For the 'Dominant Traits' callouts, use the brandTertiary token for the background to create a forensic/warning aesthetic without overwhelming the screen.",
+    "Use Ionicons to mimic SF Symbols (e.g., 'warning', 'people', 'speedometer').",
+    "Keep typography weight 500 max. Rely on size and color for hierarchy, especially for the large gauge numbers.",
+    "Implement a sticky CTA on the intake screen and a glassmorphic sticky action bar on the Scorecard screen so users can always hit 'Analyze' or 'Share' without scrolling."
+  ]
+}

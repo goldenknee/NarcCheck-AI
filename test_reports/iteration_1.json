@@ -1,0 +1,35 @@
+{
+  "summary": "Backend fully green (8/8 pytest). Frontend home screen renders, but Scorecard crashes with 'useAnimatedReactions is not a function' — a react-native-reanimated API typo in src/components/dual-gauge.tsx (should be useAnimatedReaction, singular). This blocks the entire analyse->scorecard->save flow via UI.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "src/components/dual-gauge.tsx (Gauge)", "issue": "Uses `useAnimatedReactions` from react-native-reanimated which does not exist. Correct API is `useAnimatedReaction` (singular). TypeError crashes Scorecard, ErrorBoundary shows 'Something went wrong'.", "testID": "gauge-a / gauge-b", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Analyse -> Scorecard -> Save-to-History", "issue": "Cannot verify UI end-to-end because Scorecard render crashes before verdict/gauges/save-btn mount. Backend save endpoint itself is verified via pytest.", "affected_testIDs": ["verdict-card", "gauge-a", "gauge-b", "save-btn"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "dual-gauge.tsx", "issue": "Wrong Reanimated hook name -> hard runtime crash on web/native"}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "In /app/frontend/src/components/dual-gauge.tsx, replace `useAnimatedReactions` with `useAnimatedReaction` (singular) in both the import from 'react-native-reanimated' and its usage inside Gauge().",
+    "After fix, restart expo (sudo supervisorctl restart expo) and re-run UI E2E: text-transcript analyse -> scorecard (gauge values, verdict, trait pills) -> save-to-history -> history list -> open item (read-only) -> delete.",
+    "Verified working via UI: home loads, mode switcher (text<->image), person A/B inputs, transcript input, char counter, analyse button disabled until text length>10 (aria-disabled toggles true->none). No issues with home screen padding/contrast on 390x844 viewport."
+  ],
+  "critical_code_review_comments": [
+    "server.py cleanly excludes MongoDB _id via projection ({\"_id\": 0}) — good.",
+    "AnalyzeRequest correctly enforces mode literal and 400 on empty text.",
+    "Consider moving CORSMiddleware add before include_router (currently after — still works but conventionally added first).",
+    "Consider migrating deprecated @app.on_event('shutdown') to lifespan context (FastAPI ≥ 0.109 warning)."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py (new)"],
+  "success_rate": {"backend": "100%", "frontend": "~30% (home works, scorecard blocked)"},
+  "seed_data_creation": "One TEST_ history item was created and deleted within pytest run — DB left clean.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend pytest suite lives at /app/backend/tests/backend_test.py — run with `pytest backend/tests/backend_test.py -v -n 0` (xdist parallel breaks the analyze->history dependency; force n=0). After E1 fixes the Reanimated hook name, re-run the full UI flow: paste transcript, click analyze-button, wait up to 60s for verdict-card, verify gauge-a-value/gauge-b-value show integers 0-100, click save-btn, back-btn, history-nav-button, verify history-item-* appears, tap it, verify verdict-card again with no save-btn (read-only), back and delete-*.",
+  "rca_of_issue": "React Native Reanimated exports `useAnimatedReaction` (singular). The Gauge component imports/uses `useAnimatedReactions` (plural) which is undefined at runtime -> TypeError inside a functional component render -> caught by ErrorBoundary -> user sees red 'Something went wrong' fallback on scorecard route. Fix: rename both the named import and the call site to the singular form. No other component references the wrong name."
+}
