@@ -6,7 +6,7 @@ import pytest
 import requests
 from PIL import Image, ImageDraw
 
-BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/") if os.environ.get("EXPO_PUBLIC_BACKEND_URL") else "https://narc-analyzer.preview.emergentagent.com"
+BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
 TIMEOUT = 90  # LLM calls slow

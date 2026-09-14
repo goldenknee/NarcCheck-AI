@@ -235,7 +235,7 @@ async def save_history(req: SaveHistoryRequest):
 
 @api_router.get("/history", response_model=List[HistoryItem])
 async def list_history():
-    docs = await db.history.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await db.history.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(length=500)
     return [HistoryItem(**d) for d in docs]
 
 

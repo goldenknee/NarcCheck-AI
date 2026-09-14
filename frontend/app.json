@@ -49,7 +49,6 @@
           "photosPermission": "Analyse argument screenshots you select"
         }
       ],
-      "@react-native-vector-icons/ionicons",
       "@react-native-vector-icons/ionicons"
     ],
     "experiments": {
