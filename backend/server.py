@@ -212,7 +212,7 @@ async def _run_analysis(req: AnalyzeRequest) -> AnalysisResult:
 # -----------------------------------------------------------------------------
 @api_router.get("/")
 async def root():
-    return {"message": "Narc API online"}
+    return {"message": "NarcCheck AI API online"}
 
 
 @api_router.post("/analyze", response_model=AnalysisResult)

@@ -80,7 +80,7 @@ export default function Scorecard() {
   const onShare = async () => {
     if (!result) return;
     const msg =
-      `Narc Scorecard\n` +
+      `NarcCheck AI Scorecard\n` +
       `${nameA}: ${result.person_a.narcissism_score}/100\n` +
       `${nameB}: ${result.person_b.narcissism_score}/100\n\n` +
       `Verdict: ${result.verdict}`;

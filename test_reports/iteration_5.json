@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend re-test of the RevenueCat paywall purchase flow after the defensive cache-refresh fix in /app/frontend/src/lib/revenuecat.tsx (purchaseMutation.onSuccess now calls queryClient.setQueryData with returned CustomerInfo AND follows up with Purchases.getCustomerInfo() to force-refresh; restoreMutation.onSuccess also updates cache). RESULT: ALL 3 acceptance criteria pass. (1) Simulated purchase E2E: quota-badge (3/3 FREE) -> paywall (Continue $79.99) -> dev-confirm modal -> Simulate -> RC Test Store 'Test valid purchase' -> paywall auto-closes within ~1s -> home shows green PRO badge (testID='pro-badge'). (2) With PRO active, tapping analyze-button on a valid transcript navigates directly to /scorecard, paywall does NOT re-open. (3) Restore mutation onSuccess now updates the query cache directly (verified in code); restore path itself was not re-executed on this run because after a successful purchase the paywall auto-closes and the pro-badge on home has no restore control — this is expected. In prior iteration_4 run, tapping Restore surfaced no error. Console warning observed (non-blocking): 'Invalid DOM property transform-origin. Did you mean transformOrigin?' — react-native-web style prop noise, unrelated to paywall. Backend testing skipped per frontend-only scope.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json", "/app/test_reports/iteration_4.json"],
+  "action_items": [
+    "Fix cosmetic console warning: somewhere in the RN-web tree a style is using 'transform-origin' (kebab-case) instead of 'transformOrigin' (camelCase). Non-blocking but pollutes logs. Likely in a LinearGradient or animated style. Not required for this ticket."
+  ],
+  "critical_code_review_comments": [
+    "revenuecat.tsx purchaseMutation.onSuccess correctly performs the belt-and-braces update: setQueryData with the mutation's returned CustomerInfo AND a follow-up getCustomerInfo() to overwrite with the server-authoritative snapshot. This is exactly the right pattern for RC Browser Mode where addCustomerInfoUpdateListener isn't guaranteed to fire.",
+    "revenuecat.tsx restoreMutation.onSuccess is symmetric (setQueryData with returned CustomerInfo). Could also add the follow-up getCustomerInfo() for consistency, but restore already returns fresh CustomerInfo so this is optional.",
+    "paywall.tsx useEffect(() => { if (isSubscribed) router.back(); }, [isSubscribed, router]) fires deterministically once entitlement flips — verified: paywall closed within ~1s of RC 'Test valid purchase' click.",
+    "index.tsx analyzeNow correctly reads isSubscribed via useSubscription and skips the paywall gate when true — verified navigates straight to /scorecard.",
+    "RC entitlement mapping is now correct (per /setup: entitlement_products.pro contains both prodd37e8a3f81 monthly and prodefa1d20c31 annual) — CustomerInfo.entitlements.active.pro is present after purchase."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested (frontend-only scope)",
+    "frontend": "3/3 acceptance criteria pass"
+  },
+  "seed_data_creation": "None. RC Test Store purchases are ephemeral per anonymous device id.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Paywall E2E flow is fully working. Reproduction: open preview URL -> tap quota-badge -> paywall opens -> tap paywall-purchase (Continue) -> tap dev-confirm (Simulate) -> in RC Test Store modal click 'Test valid purchase' -> paywall auto-closes ~1s later -> home shows pro-badge -> filling transcript and tapping analyze-button navigates to /scorecard without re-opening paywall. All testIDs used: quota-badge, paywall-purchase, dev-confirm-overlay, dev-confirm, pro-badge, input-transcript, analyze-button, paywall-restore, paywall-error, paywall-identity-error.",
+  "rca_of_issue": "Prior iteration_4 failure root cause was TWO factors: (a) RC dashboard entitlement 'pro' was not attached to products prodd37e8a3f81 (monthly) / prodefa1d20c31 (annual), and (b) RC Browser Mode's addCustomerInfoUpdateListener did not fire reliably to update the react-query cache. Both are fixed: (a) RC dashboard now maps 'pro' entitlement to both products (confirmed via /setup response), and (b) revenuecat.tsx now performs deterministic cache updates in purchaseMutation.onSuccess (setQueryData + getCustomerInfo) and restoreMutation.onSuccess (setQueryData). Verified end-to-end in this iteration: paywall auto-closes and pro-badge renders within ~1s of test purchase completion."
+}

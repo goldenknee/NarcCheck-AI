@@ -21,6 +21,8 @@ import * as Haptics from "expo-haptics";
 import { colors, radius, spacing } from "@/src/theme";
 import { analysisStore } from "@/src/analysis-store";
 import { VoiceRecorder } from "@/src/components/voice-recorder";
+import { useSubscription } from "@/src/lib/revenuecat";
+import { useFreeQuota, FREE_ANALYSIS_LIMIT } from "@/src/lib/free-quota";
 
 type Mode = "text" | "image" | "voice";
 
@@ -34,6 +36,10 @@ export default function Home() {
   const [images, setImages] = useState<{ uri: string; base64: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { isSubscribed } = useSubscription();
+  const { remaining, consumeOne } = useFreeQuota();
+  const showQuotaBadge = !isSubscribed;
 
   const pickImages = useCallback(async () => {
     try {
@@ -71,6 +77,14 @@ export default function Home() {
   const analyzeNow = async () => {
     if (!canAnalyze || loading) return;
     setError(null);
+
+    // Gate: paywall if free quota exhausted and not subscribed.
+    if (!isSubscribed && remaining <= 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      router.push("/paywall");
+      return;
+    }
+
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
@@ -96,6 +110,9 @@ export default function Home() {
         throw new Error(b?.detail ?? `HTTP ${res.status}`);
       }
       const result = await res.json();
+      if (!isSubscribed) {
+        await consumeOne();
+      }
       analysisStore.set({
         result,
         personAName: nameA,
@@ -137,17 +154,36 @@ export default function Home() {
               <Ionicons name="warning" size={13} color={colors.brandPrimary} />
               <Text style={styles.badgeText}>FORENSIC ANALYSIS</Text>
             </View>
-            <Pressable
-              hitSlop={16}
-              onPress={() => router.push("/history")}
-              testID="history-nav-button"
-            >
-              <Ionicons name="time-outline" size={22} color={colors.onSurface} />
-            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              {showQuotaBadge ? (
+                <Pressable
+                  onPress={() => router.push("/paywall")}
+                  style={styles.quotaBadge}
+                  testID="quota-badge"
+                >
+                  <Ionicons name="flash" size={11} color={colors.brandSecondary} />
+                  <Text style={styles.quotaBadgeText}>
+                    {remaining}/{FREE_ANALYSIS_LIMIT} FREE
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={styles.proBadge} testID="pro-badge">
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                  <Text style={styles.proBadgeText}>PRO</Text>
+                </View>
+              )}
+              <Pressable
+                hitSlop={16}
+                onPress={() => router.push("/history")}
+                testID="history-nav-button"
+              >
+                <Ionicons name="time-outline" size={22} color={colors.onSurface} />
+              </Pressable>
+            </View>
           </View>
 
           <Text style={styles.title} testID="home-title">
-            Narc
+            NarcCheck AI
           </Text>
           <Text style={styles.subtitle}>
             Analyse an argument. Uncover manipulation tactics. Score the narcissism.
@@ -327,6 +363,11 @@ export default function Home() {
                 <ActivityIndicator color={colors.onBrandPrimary} />
                 <Text style={styles.ctaText}>Analysing…</Text>
               </>
+            ) : !isSubscribed && remaining <= 0 ? (
+              <>
+                <Ionicons name="lock-closed" size={18} color={colors.onBrandPrimary} />
+                <Text style={styles.ctaText}>Unlock NarcCheck Pro</Text>
+              </>
             ) : (
               <>
                 <Ionicons name="speedometer" size={18} color={colors.onBrandPrimary} />
@@ -364,6 +405,40 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "500",
     letterSpacing: 1.2,
+  },
+  quotaBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  quotaBadgeText: {
+    color: colors.brandSecondary,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    fontWeight: "500",
+  },
+  proBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.success,
+  },
+  proBadgeText: {
+    color: colors.success,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    fontWeight: "500",
   },
   title: {
     color: colors.onSurface,

@@ -8,16 +8,20 @@ import { useEffect } from "react";
 import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
 import { colors } from "@/src/theme";
+import { SubscriptionProvider, initializeRevenueCat } from "@/src/lib/revenuecat";
 
 LogBox.ignoreAllLogs(true);
 
-// PREWARM: keep the icon-font prewarm logic so vector icons render in Expo Go.
+// Initialize RevenueCat ONCE at module scope, before any component mounts.
+try {
+  initializeRevenueCat();
+} catch (err) {
+  console.warn("RevenueCat unavailable:", err);
+}
+
 async function prewarmIcons() {
   try {
     if (Platform.OS === "web") return;
-    // Any dynamic imports of icon fonts should stay here so Metro bundles the .ttf.
-    // Ionicons ships its own font via config plugin, but touching the module also
-    // helps Metro resolve the asset on first mount in Expo Go Android.
     await import("@react-native-vector-icons/ionicons");
   } catch {
     // ignore
@@ -33,14 +37,18 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.surface }}>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.surface },
-              animation: "fade",
-            }}
-          />
+          <SubscriptionProvider>
+            <StatusBar style="light" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.surface },
+                animation: "fade",
+              }}
+            >
+              <Stack.Screen name="paywall" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+            </Stack>
+          </SubscriptionProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </GestureHandlerRootView>
