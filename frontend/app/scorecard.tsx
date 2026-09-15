@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,15 @@ import {
   Pressable,
   ActivityIndicator,
   Share,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
+import { captureRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
 
 import { colors, radius, spacing } from "@/src/theme";
 import { analysisStore } from "@/src/analysis-store";
@@ -21,6 +24,7 @@ import { getHistory, saveHistory } from "@/src/api";
 import { DualGauge } from "@/src/components/dual-gauge";
 import { TraitPill } from "@/src/components/trait-pill";
 import { CollapsibleSection } from "@/src/components/collapsible-section";
+import { ShareCard } from "@/src/components/share-card";
 
 export default function Scorecard() {
   const router = useRouter();
@@ -77,6 +81,9 @@ export default function Scorecard() {
     }
   };
 
+  const shareCardRef = useRef<View>(null);
+  const [sharingImage, setSharingImage] = useState(false);
+
   const onShare = async () => {
     if (!result) return;
     const msg =
@@ -84,6 +91,31 @@ export default function Scorecard() {
       `${nameA}: ${result.person_a.narcissism_score}/100\n` +
       `${nameB}: ${result.person_b.narcissism_score}/100\n\n` +
       `Verdict: ${result.verdict}`;
+
+    // Try to share as image (Trait Radar Export). Fall back to text on web / failure.
+    if (Platform.OS !== "web" && shareCardRef.current) {
+      setSharingImage(true);
+      try {
+        const uri = await captureRef(shareCardRef, {
+          format: "png",
+          quality: 1,
+          result: "tmpfile",
+        });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            dialogTitle: "Share your NarcCheck scorecard",
+            mimeType: "image/png",
+            UTI: "public.png",
+          });
+          setSharingImage(false);
+          return;
+        }
+      } catch (e) {
+        // fall through to text share
+      }
+      setSharingImage(false);
+    }
+
     try {
       await Share.share({ message: msg });
     } catch {}
@@ -233,9 +265,22 @@ export default function Scorecard() {
             </Text>
           </Pressable>
           <Pressable onPress={onShare} style={styles.primaryBtn} testID="share-cta">
-            <Ionicons name="share-outline" size={18} color={colors.onBrandPrimary} />
-            <Text style={styles.primaryText}>Share Card</Text>
+            {sharingImage ? (
+              <ActivityIndicator color={colors.onBrandPrimary} />
+            ) : (
+              <>
+                <Ionicons name="share-outline" size={18} color={colors.onBrandPrimary} />
+                <Text style={styles.primaryText}>Share Card</Text>
+              </>
+            )}
           </Pressable>
+        </View>
+      ) : null}
+
+      {/* Off-screen ShareCard for capture. Positioned far off-screen but still rendered. */}
+      {result ? (
+        <View style={styles.offscreen} pointerEvents="none">
+          <ShareCard ref={shareCardRef} result={result} nameA={nameA} nameB={nameB} />
         </View>
       ) : null}
     </View>
@@ -452,5 +497,11 @@ const styles = StyleSheet.create({
     color: colors.onBrandPrimary,
     fontSize: 14,
     fontWeight: "500",
+  },
+  offscreen: {
+    position: "absolute",
+    left: -9999,
+    top: 0,
+    opacity: 0,
   },
 });

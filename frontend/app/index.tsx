@@ -23,6 +23,7 @@ import { analysisStore } from "@/src/analysis-store";
 import { VoiceRecorder } from "@/src/components/voice-recorder";
 import { useSubscription } from "@/src/lib/revenuecat";
 import { useFreeQuota, FREE_ANALYSIS_LIMIT } from "@/src/lib/free-quota";
+import { StreakCard } from "@/src/components/streak-card";
 
 type Mode = "text" | "image" | "voice";
 
@@ -188,6 +189,12 @@ export default function Home() {
           <Text style={styles.subtitle}>
             Analyse an argument. Uncover manipulation tactics. Score the narcissism.
           </Text>
+
+          {isSubscribed ? (
+            <View style={{ marginBottom: spacing.lg }}>
+              <StreakCard enabled={isSubscribed} />
+            </View>
+          ) : null}
 
           {/* Mode switcher */}
           <View style={styles.segment} testID="mode-segment">

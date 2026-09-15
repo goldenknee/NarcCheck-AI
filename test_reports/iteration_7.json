@@ -1,0 +1,28 @@
+{
+  "summary": "Retest of the streak math fix in /app/frontend/src/lib/streak.ts. ALL 4 acceptance criteria PASS on a fresh PRO account. (1) streak-current renders '0' and stat subtitle reads 'best 0' (previously 11 / best 12). (2) streak-freezes reads '1 freeze this month'. (3) Exactly 12 punch dots (streak-dot-0..streak-dot-11) rendered, and getComputedStyle(backgroundColor) is identical rgb(39,39,42) for every dot — matches colors.surfaceTertiary (empty state). (4) No regression: paywall flow (quota-badge -> paywall-purchase -> dev-confirm -> RC 'Test valid purchase' in iframe) still promotes the account to PRO and the pro-badge, streak-card and analyze-button all render on home. No red-screen or console errors from our code beyond the previously-known react-native-svg 'transform-origin' web warning (out of scope per handoff note). Backend GET /api/history returns [] on a fresh device — no seeded history needed cleanup.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_7.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "streak.ts longestStreak loop (lines 127-135) now correctly gates run++ behind status==='clean'||'frozen'; empty weeks hold the run, narc resets it. Matches spec.",
+    "streak.ts currentStreak loop (lines 140-153) walks weeks in reverse and only increments currentStreak for clean|frozen. Empty is tolerated only after started=true; on a fresh account started stays false and currentStreak stays 0. Matches spec.",
+    "streak.ts return line 161 uses Math.max(longestStreak, currentStreak) — currentStreak is always <= longestStreak given the invariant above, so the max is a defensive no-op. Harmless.",
+    "streak.ts useFreeze (line 167) still parses target.weekStart via new Date('YYYY-MM-DD') which is UTC in modern engines — deterministic monthKey. OK, unchanged from iter_6."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested (frontend-only scope)",
+    "frontend": "4/4 acceptance criteria pass"
+  },
+  "seed_data_creation": "None. Fresh browser session used; GET /api/history returned [] so no cleanup necessary.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Streak card fix verified. Repro flow that PASSES: fresh browser -> home shows 3/3 FREE quota-badge -> tap quota-badge -> paywall-purchase -> dev-confirm -> in iframe click 'Test valid purchase' -> paywall closes -> pro-badge appears -> streak-card renders with streak-current='0', subtitle 'best 0', streak-freezes='1 freeze this month', 12 muted dots. Analyze flow still available (Analyse Argument button visible). testIDs used: quota-badge, paywall-purchase, dev-confirm, pro-badge, streak-card, streak-current, streak-freezes, streak-dot-{0..11}. Known non-issue carried over (do NOT re-flag per handoff): react-native-svg 'transform-origin' web console warning from dual-gauge — library-internal, does not affect native, no product impact.",
+  "rca_of_issue": "N/A — bug from iter_6 (fresh account showing current=11 / best=12) is FIXED. Verified by reading textContent of testID='streak-current' ('0') and innerText of testID='streak-card' (contains 'best 0'). Dot color audit via getComputedStyle confirmed all 12 dots use surfaceTertiary rgb(39,39,42)."
+}

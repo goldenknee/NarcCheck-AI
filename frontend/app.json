@@ -59,7 +59,8 @@
           "microphonePermission": "Record voice notes of arguments to analyse"
         }
       ],
-      "@react-native-vector-icons/ionicons"
+      "@react-native-vector-icons/ionicons",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,0 +1,38 @@
+{
+  "summary": "Tested the two new features (Streak Card + Share Card) plus regressions on paywall/analyze flow. 5/6 acceptance criteria PASS, 1 CRITICAL FAIL. PASS: (a) Free-user home shows '3/3 FREE' quota-badge and no streak-card. (b) After simulated purchase (quota-badge -> paywall-purchase -> dev-confirm -> RC 'Test valid purchase') the green PRO badge (testID='pro-badge') appears and streak-card renders above the mode switcher. (c) streak-card shows exactly 12 punch dots (streak-dot-0..11), freezes text = '1 freeze this month' (correct). (d) Analyze flow with PRO still works end-to-end and navigates to /scorecard. (e) Share-cta on web preview does NOT crash — the try/catch in scorecard.tsx falls back cleanly (no red screen, share-cta remains visible after tap). FAIL (CRITICAL, blocks acceptance): streak counters on a fresh account show current=11 weeks, best=12 instead of the expected 0/0. This is a real math bug in src/lib/streak.ts (see rca_of_issue). Also carried over from iter_5: react-native-svg dual-gauge.tsx:90 uses 'transform-origin' CSS prop which triggers a red RN-web dev overlay error on scorecard on web (cosmetic only in production but blocks initial paint of scorecard on web until dismissed).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "StreakCard", "issue": "Fresh account (0 saved analyses) shows current=11 weeks / best=12 instead of the required 0/0. Root cause in src/lib/streak.ts lines 123-148 — see rca_of_issue.", "testID": "streak-current", "priority": "CRITICAL"},
+      {"component": "DualGauge (scorecard)", "issue": "src/components/dual-gauge.tsx:90 <Circle> uses style prop 'transform-origin' (kebab-case). react-native-web logs 'Invalid DOM property transform-origin. Did you mean transformOrigin?' and shows a full-screen red console-error overlay on scorecard load on web. Fix: rename to transformOrigin.", "testID": "dual-gauge", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "home (PRO)", "issues": ["streak-card 'best 12' badge is misleading when current=11 (both bogus due to bug above). Once the math is fixed this becomes moot."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_6.json"],
+  "action_items": [
+    "Fix streak.ts math so a fresh account returns current=0 AND longest=0. Two concrete edits: (1) In the longestStreak loop, do NOT count 'empty' as part of the run — treat empty like a reset OR like a neutral sentinel that continues an existing run but never STARTS one. Simplest correct impl: only clean|frozen advance the run, empty holds the run (does not reset, does not extend). (2) In the currentStreak loop, break/return on 'empty' when currentStreak is still 0 (i.e., no clean week seen yet), instead of the current 'gap in the middle counts if streak is already running' branch that fires for every empty non-current week from a cold start.",
+    "Rename dual-gauge.tsx:90 style prop 'transform-origin' -> 'transformOrigin' to eliminate the RN-web red console-error overlay on scorecard on web.",
+    "(Optional) Add a unit test at frontend/src/lib/__tests__/streak.test.ts covering: (i) empty history -> {current:0,longest:0}, (ii) one clean week in current week -> {current:1,longest:1}, (iii) narc week last -> current=0, (iv) freeze consumes narc -> streak survives."
+  ],
+  "critical_code_review_comments": [
+    "src/lib/streak.ts line 127 lumps 'empty' with 'clean|frozen' when building longestStreak — this is why a brand-new user is credited with a 12-week best streak. Empty weeks are ambiguous, not clean; they must not extend the best streak on their own.",
+    "src/lib/streak.ts line 144-147 currentStreak logic: the 'gap in the middle counts if streak is already running' comment is correct, but the guard is missing — the branch fires even when currentStreak===0 (no run has started), which is why a fresh account gets current=11. Add `&& currentStreak > 0` or break when currentStreak===0 && s==='empty' && i !== weeks.length-1.",
+    "share-card.tsx + scorecard.tsx offscreen render: card is 720x900 rendered at absolute left:-9999 with opacity:0 — this is fine for react-native-view-shot on native but on web the pointerEvents='none' prop is deprecated (console warns). Non-blocking. Consider style={{pointerEvents:'none'}}.",
+    "scorecard.tsx onShare correctly guards Platform.OS !== 'web' before calling captureRef + Sharing.shareAsync, and always falls back to Share.share for text. Verified no crash on web preview.",
+    "StreakCard.useFreeze reads target.weekStart via new Date(target.weekStart) — weekStart is an ISO date-only string ('YYYY-MM-DD'). new Date('2026-01-05') parses as UTC midnight in modern browsers, so monthKey() is deterministic. OK."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested (frontend-only scope)",
+    "frontend": "5/6 acceptance criteria pass — streak counters wrong for fresh account"
+  },
+  "seed_data_creation": "None. RC Test Store purchases are ephemeral per anonymous device id; a fresh device gets 0 history items.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Repro of the streak counter bug: open preview URL in a fresh browser (or clear site data). Home shows 3/3 FREE, no streak-card. Tap quota-badge -> paywall-purchase -> plan-annual (auto-selected) -> dev-confirm -> in RC Test Store iframe click 'Test valid purchase'. Paywall auto-closes within ~1s, home now shows pro-badge and streak-card. Inspect testID='streak-current' -> reads '11', 'streak-freezes' -> '1 freeze this month', 12 dots streak-dot-0..streak-dot-11 (all appear muted-grey = 'empty' state visually, consistent with no history). Expected per spec: streak-current='0' and the 'best N' subtitle should also read 0. Additional testIDs used: quota-badge, pro-badge, paywall-purchase, plan-annual, dev-confirm-overlay, dev-confirm, streak-card, streak-current, streak-freezes, streak-dot-{i}, streak-use-freeze (not tested — needs at least one 'narc' week in history to render), input-transcript, analyze-button, share-cta, share-btn.",
+  "rca_of_issue": "BUG: fresh account streak shows 11/12 instead of 0/0. FILE: /app/frontend/src/lib/streak.ts. ROOT CAUSE: two independent errors in the useMemo() body. (1) longestStreak loop (lines 123-133) treats status 'empty' as equivalent to 'clean'|'frozen' and increments run every iteration. For a 12-week window with no history, run goes 1..12 and longestStreak=12. (2) currentStreak loop (lines 135-148) walks the weeks in reverse; the special-case at line 141 only skips the CURRENT week when it is empty and no streak started; but for every OTHER empty week (i < weeks.length-1) the branch at line 144-147 unconditionally increments currentStreak, even when no clean/frozen week has ever been observed. For a fresh account this fires for i=10 down to i=0, giving currentStreak=11. FIX (minimal): change line 127 to `if (w.status === 'clean' || w.status === 'frozen')` (remove empty) so longest only counts actually-clean weeks; and add `&& currentStreak > 0` to the line 144 branch (or break) so empty weeks only extend an already-running streak. After that, expected fresh-account output = {current:0, longest:0, freezesAvailable:1, weekPunches:[12x empty]}."
+}
