@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
 import { colors } from "@/src/theme";
 import { SubscriptionProvider, initializeRevenueCat } from "@/src/lib/revenuecat";
+import { AuthProvider } from "@/src/lib/auth";
 
 LogBox.ignoreAllLogs(true);
 
@@ -37,18 +38,21 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.surface }}>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <SubscriptionProvider>
-            <StatusBar style="light" />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.surface },
-                animation: "fade",
-              }}
-            >
-              <Stack.Screen name="paywall" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
-            </Stack>
-          </SubscriptionProvider>
+          <AuthProvider>
+            <SubscriptionProvider>
+              <StatusBar style="light" />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.surface },
+                  animation: "fade",
+                }}
+              >
+                <Stack.Screen name="paywall" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                <Stack.Screen name="sign-in" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+              </Stack>
+            </SubscriptionProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </GestureHandlerRootView>

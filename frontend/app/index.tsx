@@ -24,6 +24,7 @@ import { VoiceRecorder } from "@/src/components/voice-recorder";
 import { useSubscription } from "@/src/lib/revenuecat";
 import { useFreeQuota, FREE_ANALYSIS_LIMIT } from "@/src/lib/free-quota";
 import { StreakCard } from "@/src/components/streak-card";
+import { useAuth } from "@/src/lib/auth";
 
 type Mode = "text" | "image" | "voice";
 
@@ -41,6 +42,7 @@ export default function Home() {
   const { isSubscribed } = useSubscription();
   const { remaining, consumeOne } = useFreeQuota();
   const showQuotaBadge = !isSubscribed;
+  const { isAuthed, user, signOut } = useAuth();
 
   const pickImages = useCallback(async () => {
     try {
@@ -180,6 +182,25 @@ export default function Home() {
               >
                 <Ionicons name="time-outline" size={22} color={colors.onSurface} />
               </Pressable>
+              {isAuthed ? (
+                <Pressable
+                  hitSlop={12}
+                  onPress={signOut}
+                  style={styles.userChip}
+                  testID="sign-out-btn"
+                >
+                  <Ionicons name="person-circle" size={22} color={colors.brandSecondary} />
+                </Pressable>
+              ) : (
+                <Pressable
+                  hitSlop={12}
+                  onPress={() => router.push("/sign-in")}
+                  style={styles.userChip}
+                  testID="sign-in-btn"
+                >
+                  <Ionicons name="person-circle-outline" size={22} color={colors.onSurface} />
+                </Pressable>
+              )}
             </View>
           </View>
 
@@ -446,6 +467,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1.1,
     fontWeight: "500",
+  },
+  userChip: {
+    marginLeft: 2,
   },
   title: {
     color: colors.onSurface,

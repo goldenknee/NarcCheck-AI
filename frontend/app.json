@@ -10,6 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.narcanalyzer.cslz18",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Analyse argument screenshots you select",
         "NSMicrophoneUsageDescription": "Record voice notes of arguments to analyse"

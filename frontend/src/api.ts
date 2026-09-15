@@ -1,5 +1,21 @@
-// API client for the Narc backend.
+// API client for the NarcCheck AI backend.
+// - Auth: attaches Bearer session_token when signed in.
+// - Anonymous: attaches X-Device-Id so the server can scope history / migrate on login.
+import { Platform } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import { getSessionToken } from "./lib/auth";
+
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL ?? "";
+const DEVICE_ID_KEY = "narc.device_id";
+
+async function readDeviceId(): Promise<string | null> {
+  try {
+    if (Platform.OS === "web") return window.localStorage.getItem(DEVICE_ID_KEY);
+    return await SecureStore.getItemAsync(DEVICE_ID_KEY);
+  } catch {
+    return null;
+  }
+}
 
 export type ParticipantScore = {
   name: string;
@@ -26,6 +42,8 @@ export type HistoryItem = {
   result: AnalysisResult;
   source_mode: "text" | "image";
   source_text_preview?: string | null;
+  user_id?: string | null;
+  device_id?: string | null;
 };
 
 type AnalyzeReq =
@@ -33,10 +51,16 @@ type AnalyzeReq =
   | { mode: "image"; images_base64: string[]; person_a_name?: string; person_b_name?: string };
 
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as any),
+  };
+  const token = getSessionToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const deviceId = await readDeviceId();
+  if (deviceId) headers["X-Device-Id"] = deviceId;
+
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {

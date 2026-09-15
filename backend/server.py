@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Literal
 
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Header
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -18,6 +18,11 @@ from pydantic import BaseModel, Field
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 from emergentintegrations.llm.openai.speech_to_text import OpenAISpeechToText
+from auth import (
+    make_auth_router,
+    ensure_indexes as ensure_auth_indexes,
+    get_current_user_optional,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -73,6 +78,8 @@ class HistoryItem(BaseModel):
     result: AnalysisResult
     source_mode: str
     source_text_preview: Optional[str] = None
+    user_id: Optional[str] = None
+    device_id: Optional[str] = None
 
 
 class SaveHistoryRequest(BaseModel):
@@ -81,6 +88,7 @@ class SaveHistoryRequest(BaseModel):
     result: AnalysisResult
     source_mode: str
     source_text_preview: Optional[str] = None
+    device_id: Optional[str] = None
 
 
 # -----------------------------------------------------------------------------
@@ -268,7 +276,12 @@ async def transcribe(file: UploadFile = File(...)):
 
 
 @api_router.post("/history", response_model=HistoryItem)
-async def save_history(req: SaveHistoryRequest):
+async def save_history(
+    req: SaveHistoryRequest,
+    authorization: Optional[str] = Header(default=None),
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-Id"),
+):
+    user = await get_current_user_optional(db, authorization)
     item = HistoryItem(
         person_a_name=req.person_a_name,
         person_b_name=req.person_b_name,
@@ -278,34 +291,90 @@ async def save_history(req: SaveHistoryRequest):
         result=req.result,
         source_mode=req.source_mode,
         source_text_preview=req.source_text_preview,
+        user_id=user.user_id if user else None,
+        device_id=None if user else (req.device_id or x_device_id),
     )
     await db.history.insert_one(item.model_dump())
     return item
 
 
 @api_router.get("/history", response_model=List[HistoryItem])
-async def list_history():
-    docs = await db.history.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(length=500)
+async def list_history(
+    authorization: Optional[str] = Header(default=None),
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-Id"),
+):
+    user = await get_current_user_optional(db, authorization)
+    if user:
+        query = {"user_id": user.user_id}
+    elif x_device_id:
+        query = {"device_id": x_device_id, "user_id": {"$in": [None, ""]}}
+    else:
+        # Backwards-compat: anonymous callers without a device id see legacy
+        # anonymous history that has no user_id and no device_id.
+        query = {"user_id": {"$in": [None, ""]}, "device_id": {"$in": [None, ""]}}
+    docs = (
+        await db.history.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(500)
+        .to_list(length=500)
+    )
     return [HistoryItem(**d) for d in docs]
 
 
 @api_router.get("/history/{item_id}", response_model=HistoryItem)
-async def get_history(item_id: str):
+async def get_history(
+    item_id: str,
+    authorization: Optional[str] = Header(default=None),
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-Id"),
+):
     doc = await db.history.find_one({"id": item_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
+    user = await get_current_user_optional(db, authorization)
+    if user:
+        if doc.get("user_id") != user.user_id:
+            raise HTTPException(status_code=404, detail="Not found")
+    else:
+        # anonymous can only read items with no user_id
+        if doc.get("user_id"):
+            raise HTTPException(status_code=404, detail="Not found")
+        if x_device_id and doc.get("device_id") and doc.get("device_id") != x_device_id:
+            raise HTTPException(status_code=404, detail="Not found")
     return HistoryItem(**doc)
 
 
 @api_router.delete("/history/{item_id}")
-async def delete_history(item_id: str):
-    res = await db.history.delete_one({"id": item_id})
-    if res.deleted_count == 0:
+async def delete_history(
+    item_id: str,
+    authorization: Optional[str] = Header(default=None),
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-Id"),
+):
+    doc = await db.history.find_one({"id": item_id}, {"_id": 0})
+    if not doc:
         raise HTTPException(status_code=404, detail="Not found")
+    user = await get_current_user_optional(db, authorization)
+    if user:
+        if doc.get("user_id") != user.user_id:
+            raise HTTPException(status_code=404, detail="Not found")
+    else:
+        if doc.get("user_id"):
+            raise HTTPException(status_code=404, detail="Not found")
+        if x_device_id and doc.get("device_id") and doc.get("device_id") != x_device_id:
+            raise HTTPException(status_code=404, detail="Not found")
+    await db.history.delete_one({"id": item_id})
     return {"deleted": True}
 
 
 app.include_router(api_router)
+app.include_router(make_auth_router(db), prefix="/api")
+
+
+@app.on_event("startup")
+async def _startup():
+    try:
+        await ensure_auth_indexes(db)
+    except Exception:
+        logging.exception("auth index setup failed")
 
 app.add_middleware(
     CORSMiddleware,

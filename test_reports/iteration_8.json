@@ -1,0 +1,32 @@
+{
+  "summary": "Full backend + frontend verification of Apple + Emergent-Google Sign-In additions and history scoping/migration. 12/12 backend pytest cases PASS. All 4 frontend acceptance criteria PASS: (1) sign-in-btn (person-circle-outline) shown when unauthed, (2) tapping it navigates to /sign-in modal with sign-in-close, apple-signin-fallback, google-signin, sign-in-later controls, (3) Apple fallback renders label 'Apple Sign-In (iOS only)' on web (disabled correctly), (4) Google button navigates the top-level tab to https://auth.emergentagent.com/oauth/?redirect=... (no crash — we did not complete OAuth), (5) 'Keep using anonymously' link closes the modal and returns to home. Backend covers: /auth/apple invalid-token 401, /auth/session invalid-session_id 401, /auth/me unauthorized 401, /auth/me + /auth/logout with a seeded user_sessions row (session becomes invalid after logout), history scoping by X-Device-Id (devA/devB isolation), history scoping by Bearer (authed writes have user_id and no device_id; anon caller cannot see authed items), and history migration outcome (device_id -> user_id via the same $set/$unset the server executes) — after migration authed GET sees the item and anon GET on the old device id no longer does. No regression: /api/ root, /api/analyze mode=text with a real prompt, /api/history anon save, /api/transcribe with a synthesized 16 kHz PCM WAV.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_and_history.py",
+    "/app/test_reports/pytest/auth_history_results.xml",
+    "/app/test_reports/iteration_8.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth.py _migrate_device_history uses update_many with $unset — matches the recovery approach used in the test's Mongo simulation; correct.",
+    "server.py /api/history POST correctly ignores device_id when a user is authenticated (device_id=None if user else req.device_id or x_device_id).",
+    "server.py /api/history GET falls back to legacy anon query when no X-Device-Id is present; acceptable backwards-compat.",
+    "auth.py ensure_indexes creates a unique sparse email index — safe because seeded users use TEST_ prefixed unique emails.",
+    "user_sessions has no TTL index; token expiry is enforced only at request time via _to_utc(expires_at). Consider a Mongo TTL index on a real Date field later (documented in code comment already).",
+    "sign-in.tsx correctly gates the AppleAuthenticationButton behind Platform.OS==='ios' && appleAvailable; web falls back to a disabled pressable with 'Apple Sign-In (iOS only)' text as designed.",
+    "auth.tsx web signInWithGoogle uses window.location.href for a full-page redirect to auth.emergentagent.com — confirmed working."
+  ],
+  "updated_files": ["/app/backend/tests/test_auth_and_history.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "5/5 acceptance criteria pass"},
+  "seed_data_creation": "Per-test seeded users/sessions and X-Device-Id-tagged history rows, all prefixed TEST_ and cleaned up in fixture teardown (users, user_sessions, history collections).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend regression suite at /app/backend/tests/test_auth_and_history.py — reusable. Uses MONGO_URL from backend/.env to seed users/sessions/history via pymongo, then hits the public EXPO_PUBLIC_BACKEND_URL. Apple happy-path cannot be exercised without a real Apple identity_token; the migration test therefore validates the observable outcome (same $set/$unset Mongo op the server runs on successful Apple login) rather than mocking JWKS. Google happy-path similarly not exercised — only the 401 error path. Frontend sign-in modal testIDs: sign-in-btn (home), sign-in-close, apple-signin-fallback, google-signin, sign-in-later, sign-in-error. On web, Apple fallback is intentionally disabled with label 'Apple Sign-In (iOS only)'.",
+  "rca_of_issue": "N/A — feature addition verified end-to-end."
+}
