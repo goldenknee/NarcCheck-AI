@@ -42,7 +42,7 @@ export default function Home() {
   const { isSubscribed } = useSubscription();
   const { remaining, consumeOne } = useFreeQuota();
   const showQuotaBadge = !isSubscribed;
-  const { isAuthed, user, signOut } = useAuth();
+  const { isAuthed } = useAuth();
 
   const pickImages = useCallback(async () => {
     try {
@@ -185,9 +185,9 @@ export default function Home() {
               {isAuthed ? (
                 <Pressable
                   hitSlop={12}
-                  onPress={signOut}
+                  onPress={() => router.push("/settings")}
                   style={styles.userChip}
-                  testID="sign-out-btn"
+                  testID="settings-btn"
                 >
                   <Ionicons name="person-circle" size={22} color={colors.brandSecondary} />
                 </Pressable>

@@ -35,6 +35,7 @@ type Ctx = {
   signInWithApple: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   error: string | null;
   clearError: () => void;
 };
@@ -284,6 +285,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ status: "anon" });
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    setError(null);
+    const t = currentToken;
+    if (!t) {
+      throw new Error("not_signed_in");
+    }
+    const res = await fetch(`${BASE}/api/auth/me`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      throw new Error(b?.detail ?? `delete_account_failed ${res.status}`);
+    }
+    await storeToken(null);
+    setState({ status: "anon" });
+  }, []);
+
   const value: Ctx = useMemo(
     () => ({
       state,
@@ -294,10 +313,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInWithApple,
       signInWithGoogle,
       signOut,
+      deleteAccount,
       error,
       clearError: () => setError(null),
     }),
-    [state, appleAvailable, signInWithApple, signInWithGoogle, signOut, error],
+    [state, appleAvailable, signInWithApple, signInWithGoogle, signOut, deleteAccount, error],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

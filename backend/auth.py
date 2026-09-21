@@ -199,9 +199,14 @@ async def get_current_user_optional(db, authorization: Optional[str]) -> Optiona
     exp = _to_utc(session.get("expires_at"))
     if datetime.now(timezone.utc) >= exp:
         return None
-    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    user = await db.users.find_one(
+        {"user_id": session["user_id"], "deleted_at": {"$in": [None, ""]}},
+        {"_id": 0},
+    )
     if not user:
         return None
+    # Drop soft-delete field if present so it doesn't break the pydantic model.
+    user.pop("deleted_at", None)
     return User(**user)
 
 
@@ -289,6 +294,35 @@ def make_auth_router(db) -> APIRouter:
             token = authorization.split(" ", 1)[1].strip()
             await db.user_sessions.delete_one({"session_token": token})
         return {"ok": True}
+
+    @router.delete("/me")
+    async def delete_me(authorization: Optional[str] = Header(default=None)):
+        """Soft-delete the current user's account.
+
+        - user is marked with `deleted_at` and hidden from auth queries.
+        - every session for this user is invalidated immediately.
+        - every history row belonging to the user is soft-deleted too.
+        """
+        user = await require_current_user(db, authorization)
+        now = _iso_now()
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$set": {"deleted_at": now}},
+        )
+        await db.user_sessions.delete_many({"user_id": user.user_id})
+        history_result = await db.history.update_many(
+            {"user_id": user.user_id, "deleted_at": {"$in": [None, ""]}},
+            {"$set": {"deleted_at": now}},
+        )
+        logger.info(
+            "account deleted user_id=%s history_soft_deleted=%d",
+            user.user_id,
+            history_result.modified_count or 0,
+        )
+        return {
+            "deleted": True,
+            "history_items_removed": history_result.modified_count or 0,
+        }
 
     return router
 

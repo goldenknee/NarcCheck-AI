@@ -305,13 +305,21 @@ async def list_history(
 ):
     user = await get_current_user_optional(db, authorization)
     if user:
-        query = {"user_id": user.user_id}
+        query = {"user_id": user.user_id, "deleted_at": {"$in": [None, ""]}}
     elif x_device_id:
-        query = {"device_id": x_device_id, "user_id": {"$in": [None, ""]}}
+        query = {
+            "device_id": x_device_id,
+            "user_id": {"$in": [None, ""]},
+            "deleted_at": {"$in": [None, ""]},
+        }
     else:
         # Backwards-compat: anonymous callers without a device id see legacy
         # anonymous history that has no user_id and no device_id.
-        query = {"user_id": {"$in": [None, ""]}, "device_id": {"$in": [None, ""]}}
+        query = {
+            "user_id": {"$in": [None, ""]},
+            "device_id": {"$in": [None, ""]},
+            "deleted_at": {"$in": [None, ""]},
+        }
     docs = (
         await db.history.find(query, {"_id": 0})
         .sort("created_at", -1)
@@ -327,7 +335,10 @@ async def get_history(
     authorization: Optional[str] = Header(default=None),
     x_device_id: Optional[str] = Header(default=None, alias="X-Device-Id"),
 ):
-    doc = await db.history.find_one({"id": item_id}, {"_id": 0})
+    doc = await db.history.find_one(
+        {"id": item_id, "deleted_at": {"$in": [None, ""]}},
+        {"_id": 0},
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     user = await get_current_user_optional(db, authorization)
@@ -349,7 +360,10 @@ async def delete_history(
     authorization: Optional[str] = Header(default=None),
     x_device_id: Optional[str] = Header(default=None, alias="X-Device-Id"),
 ):
-    doc = await db.history.find_one({"id": item_id}, {"_id": 0})
+    doc = await db.history.find_one(
+        {"id": item_id, "deleted_at": {"$in": [None, ""]}},
+        {"_id": 0},
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     user = await get_current_user_optional(db, authorization)
@@ -361,7 +375,10 @@ async def delete_history(
             raise HTTPException(status_code=404, detail="Not found")
         if x_device_id and doc.get("device_id") and doc.get("device_id") != x_device_id:
             raise HTTPException(status_code=404, detail="Not found")
-    await db.history.delete_one({"id": item_id})
+    await db.history.update_one(
+        {"id": item_id},
+        {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}},
+    )
     return {"deleted": True}
 
 
