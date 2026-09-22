@@ -8,35 +8,28 @@ NarcCheck AI is a mobile app (Expo / React Native, iOS + Android) that evaluates
 - FastAPI + MongoDB backend (routes prefixed with `/api`)
 - OpenAI GPT-5.4 (multimodal) + Whisper via Emergent Universal Key
 - Emergent-managed RevenueCat for in-app subscriptions
-- Auth: Apple Sign-In (iOS) + Emergent-managed Google Sign-In. Optional — app is fully usable anonymously.
+- Auth: Apple Sign-In (iOS) + Emergent-managed Google Sign-In (optional)
 
 ## Screens
-- `/` — Intake (3-tab: Paste / Screenshots / Voice; participant names; quota / PRO badge; sign-in / sign-out button; Streak card for Pro; sticky Analyse CTA)
-- `/scorecard` — Dual animated SVG gauges, verdict banner, trait pills, notable quotes, collapsible breakdown; Save + Share (Trait Radar Export via react-native-view-shot)
-- `/history` — Saved analyses (scoped by user_id when signed in, by device_id when anonymous)
-- `/paywall` — Annual $60 / Monthly $8.99 subscription modal (Emergent-managed RevenueCat)
-- `/sign-in` — Optional Apple + Google auth modal
+- `/` — Intake (Paste / Screenshots / Voice); quota / PRO badge; sign-in / settings icon; Streak card for Pro; sticky Analyse CTA
+- `/scorecard` — Dual animated SVG gauges, verdict banner, trait pills, notable quotes, collapsible breakdown; Save + Share Card (view-shot + expo-sharing)
+- `/history` — Saved analyses (scoped by user_id or X-Device-Id)
+- `/paywall` — Annual $60 / Monthly $8.99 (Emergent-managed RevenueCat)
+- `/sign-in` — Optional Apple + Google auth
+- `/settings` — Account, Subscription (manage/upgrade), Sign Out, **Delete Account** (soft-delete), Legal (Privacy / Terms / Support), medical-advice disclaimer
 
 ## API (`/api`)
 - `POST /analyze` — text OR image analysis
 - `POST /transcribe` — whisper-1 audio transcription
-- `POST/GET/GET-by-id/DELETE /history` — MongoDB-backed, scoped by user_id or X-Device-Id
-- `POST /auth/apple` — Apple identity token verification, issues 7-day session token
-- `POST /auth/session` — Emergent Google session_id exchange, issues 7-day session token
-- `GET  /auth/me` — Bearer session token → current user
+- `POST/GET/GET-by-id/DELETE /history` — MongoDB-backed, scoped, soft-delete
+- `POST /auth/apple` — Apple identity token verification → session token
+- `POST /auth/session` — Emergent Google session_id exchange → session token
+- `GET  /auth/me` — Bearer → current user (excludes soft-deleted users)
 - `POST /auth/logout` — invalidates the session token
-
-## Auth model
-- Bearer session tokens stored in `expo-secure-store` on native, `localStorage` on web
-- History migration: on first sign-in the server bulk-updates rows where `device_id == caller_device_id` to set `user_id` and unset `device_id`
-- Anonymous users always work — no forced sign-in anywhere in the flow
-
-## Subscription model
-- 3 free analyses total tracked on-device with AsyncStorage; 4th tap opens paywall
-- `pro` entitlement unlocks unlimited analyses + the No-Narc Streak widget
-- Save + Share + History remain free
+- `DELETE /auth/me` — soft-deletes the user, purges all sessions, soft-deletes all history
 
 ## Design
-- Strict dark palette from `/app/design_guidelines.json` (carbon `#09090B`, Signal Red `#DC2626`, Amber `#F59E0B`)
-- Tokens live in `/app/frontend/src/theme.ts`
-- Haptics on primary CTA, gauge settle, collapsible toggle, purchase success, streak freeze
+- Strict dark palette from `/app/design_guidelines.json`
+- Tokens in `/app/frontend/src/theme.ts`
+- Brand red `#DC2626`, amber `#F59E0B`, carbon `#09090B`
+- App icon: red rounded square with black-stroked white "N"

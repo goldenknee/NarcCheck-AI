@@ -17,15 +17,7 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
-      },
-      "package": "com.emergent.narcanalyzer.cslz18",
-      "permissions": [
-        "READ_MEDIA_IMAGES",
-        "RECORD_AUDIO"
-      ]
+      "package": "com.emergent.narcanalyzer.cslz18"
     },
     "web": {
       "bundler": "metro",

@@ -67,11 +67,7 @@ export default function SettingsScreen() {
   };
 
   const openManageSubs = () => {
-    if (Platform.OS === "ios") {
-      Linking.openURL("itms-apps://apps.apple.com/account/subscriptions").catch(() => {});
-    } else if (Platform.OS === "android") {
-      Linking.openURL("https://play.google.com/store/account/subscriptions").catch(() => {});
-    }
+    Linking.openURL("itms-apps://apps.apple.com/account/subscriptions").catch(() => {});
   };
 
   if (!user) return null;
@@ -141,15 +137,13 @@ export default function SettingsScreen() {
                 </View>
               </View>
               {isSubscribed ? (
-                Platform.OS === "ios" || Platform.OS === "android" ? (
-                  <Pressable
-                    onPress={openManageSubs}
-                    style={styles.tinyBtn}
-                    testID="manage-subs-btn"
-                  >
-                    <Text style={styles.tinyBtnText}>Manage</Text>
-                  </Pressable>
-                ) : null
+                <Pressable
+                  onPress={openManageSubs}
+                  style={styles.tinyBtn}
+                  testID="manage-subs-btn"
+                >
+                  <Text style={styles.tinyBtnText}>Manage</Text>
+                </Pressable>
               ) : (
                 <Pressable
                   onPress={() => router.push("/paywall")}
@@ -202,7 +196,58 @@ export default function SettingsScreen() {
             </Pressable>
           </View>
           <Text style={styles.footnote}>
-            Deleting your account permanently removes your saved history and signs you out on every device. Your subscription is managed by {Platform.OS === "ios" ? "Apple" : "Google"} — cancel it from the store to stop future charges.
+            Deleting your account permanently removes your saved history and signs you out on every device. Your subscription is managed by Apple — cancel it from the App Store to stop future charges.
+          </Text>
+        </View>
+
+        {/* Legal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>LEGAL</Text>
+          <View style={styles.card}>
+            <Pressable
+              onPress={() => Linking.openURL("https://narccheckai.app/privacy").catch(() => {})}
+              style={styles.rowBetween}
+              testID="privacy-link"
+            >
+              <View style={styles.rowLeft}>
+                <View style={[styles.rowIcon, { backgroundColor: colors.surfaceTertiary }]}>
+                  <Ionicons name="shield-checkmark-outline" size={16} color={colors.onSurface} />
+                </View>
+                <Text style={styles.rowTitle}>Privacy Policy</Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.muted} />
+            </Pressable>
+            <View style={styles.hairline} />
+            <Pressable
+              onPress={() => Linking.openURL("https://narccheckai.app/terms").catch(() => {})}
+              style={styles.rowBetween}
+              testID="terms-link"
+            >
+              <View style={styles.rowLeft}>
+                <View style={[styles.rowIcon, { backgroundColor: colors.surfaceTertiary }]}>
+                  <Ionicons name="document-text-outline" size={16} color={colors.onSurface} />
+                </View>
+                <Text style={styles.rowTitle}>Terms of Service</Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.muted} />
+            </Pressable>
+            <View style={styles.hairline} />
+            <Pressable
+              onPress={() => Linking.openURL("mailto:support@narccheckai.app").catch(() => {})}
+              style={styles.rowBetween}
+              testID="support-link"
+            >
+              <View style={styles.rowLeft}>
+                <View style={[styles.rowIcon, { backgroundColor: colors.surfaceTertiary }]}>
+                  <Ionicons name="mail-outline" size={16} color={colors.onSurface} />
+                </View>
+                <Text style={styles.rowTitle}>Contact Support</Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.muted} />
+            </Pressable>
+          </View>
+          <Text style={styles.footnote}>
+            NarcCheck AI is for personal reflection and entertainment only. It is not a substitute for medical or psychological advice, diagnosis, or treatment. If you are in crisis, please reach out to a licensed professional.
           </Text>
         </View>
       </ScrollView>

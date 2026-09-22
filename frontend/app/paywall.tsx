@@ -214,7 +214,7 @@ export default function Paywall() {
         ) : null}
 
         <Text style={styles.finePrint}>
-          Recurring billing. Cancel anytime in your App Store / Play Store settings. Payments go through Apple / Google.
+          Recurring billing. Cancel anytime in your App Store settings. Payments go through Apple.
         </Text>
       </ScrollView>
 
