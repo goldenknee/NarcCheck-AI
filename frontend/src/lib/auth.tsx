@@ -44,8 +44,30 @@ const AuthContext = createContext<Ctx | null>(null);
 
 // Module-level token for API client to read synchronously.
 let currentToken: string | null = null;
+
+// Best-effort SYNC bootstrap on web so API calls made before AuthProvider mounts
+// (or before its async loadStoredToken resolves) still send Authorization.
+if (typeof window !== "undefined" && window.localStorage) {
+  try {
+    currentToken = window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function getSessionToken(): string | null {
-  return currentToken;
+  if (currentToken) return currentToken;
+  // Web fallback — always fresh from localStorage.
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const t = window.localStorage.getItem(TOKEN_KEY);
+      if (t) currentToken = t;
+      return t;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 // Called once in root layout.

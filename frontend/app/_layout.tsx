@@ -51,6 +51,7 @@ export default function RootLayout() {
                 <Stack.Screen name="paywall" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
                 <Stack.Screen name="sign-in" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
                 <Stack.Screen name="settings" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
               </Stack>
             </SubscriptionProvider>
           </AuthProvider>

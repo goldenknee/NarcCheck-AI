@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { useSubscription } from "@/src/lib/revenuecat";
 import { useFreeQuota, FREE_ANALYSIS_LIMIT } from "@/src/lib/free-quota";
 import { StreakCard } from "@/src/components/streak-card";
 import { useAuth } from "@/src/lib/auth";
+import { useOnboardingState } from "@/src/lib/onboarding";
 
 type Mode = "text" | "image" | "voice";
 
@@ -43,6 +44,13 @@ export default function Home() {
   const { remaining, consumeOne } = useFreeQuota();
   const showQuotaBadge = !isSubscribed;
   const { isAuthed } = useAuth();
+  const { onboarded } = useOnboardingState();
+
+  useEffect(() => {
+    if (onboarded === false) {
+      router.replace("/onboarding");
+    }
+  }, [onboarded, router]);
 
   const pickImages = useCallback(async () => {
     try {
