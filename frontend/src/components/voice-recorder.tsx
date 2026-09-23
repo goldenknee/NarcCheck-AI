@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
-import * as FileSystem from "expo-file-system/legacy";
+import { File, UploadType } from "expo-file-system";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, cancelAnimation } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -111,8 +111,7 @@ export function VoiceRecorder({ onTranscript }: Props) {
   const upload = async (uri: string) => {
     setTranscribing(true);
     try {
-      const name = uri.split("/").pop() || "voice.m4a";
-      const ext = (name.split(".").pop() || "m4a").toLowerCase();
+      const ext = (uri.split(".").pop() || "m4a").toLowerCase();
       const mime =
         ext === "wav" ? "audio/wav" :
         ext === "mp3" ? "audio/mpeg" :
@@ -120,32 +119,29 @@ export function VoiceRecorder({ onTranscript }: Props) {
         "audio/m4a";
 
       // Expo SDK 56+ uses WinterCG fetch, which rejects RN's { uri, name, type }
-      // FormData part shape ("Unsupported FormDataPart implementation"). Read the
-      // recording's raw bytes via expo-file-system and wrap them in a real Blob
-      // so the multipart upload serializes correctly on iOS.
-      const b64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const binary = globalThis.atob(b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: mime });
+      // FormData part shape ("Unsupported FormDataPart implementation") and
+      // React Native's Blob polyfill can't be constructed from ArrayBuffer.
+      // Use expo-file-system's native File.upload() which streams the file via
+      // URLSession / HttpUrlConnection and handles multipart natively.
+      const file = new File(uri);
+      const result = await file.upload(
+        `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/transcribe`,
+        {
+          httpMethod: "POST",
+          uploadType: UploadType.MULTIPART,
+          fieldName: "file",
+          mimeType: mime,
+        }
+      );
 
-      const form = new FormData();
-      // Third arg (filename) is required so FastAPI's UploadFile.filename is set.
-      form.append("file", blob, name);
-
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/transcribe`, {
-        method: "POST",
-        body: form,
-      });
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({}));
-        throw new Error(b?.detail ?? `HTTP ${res.status}`);
+      if (result.status < 200 || result.status >= 300) {
+        let detail: string | undefined;
+        try {
+          detail = JSON.parse(result.body)?.detail;
+        } catch {}
+        throw new Error(detail ?? `HTTP ${result.status}`);
       }
-      const data = (await res.json()) as { text: string };
+      const data = JSON.parse(result.body) as { text: string };
       onTranscript(data.text ?? "");
     } catch (e: any) {
       setError(e?.message ?? "Transcription failed");
