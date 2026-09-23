@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
+import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, cancelAnimation } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -110,8 +111,6 @@ export function VoiceRecorder({ onTranscript }: Props) {
   const upload = async (uri: string) => {
     setTranscribing(true);
     try {
-      const form = new FormData();
-      // React Native FormData accepts { uri, name, type } for file uploads
       const name = uri.split("/").pop() || "voice.m4a";
       const ext = (name.split(".").pop() || "m4a").toLowerCase();
       const mime =
@@ -119,8 +118,24 @@ export function VoiceRecorder({ onTranscript }: Props) {
         ext === "mp3" ? "audio/mpeg" :
         ext === "webm" ? "audio/webm" :
         "audio/m4a";
-      // @ts-expect-error React Native's FormData file shape
-      form.append("file", { uri, name, type: mime });
+
+      // Expo SDK 56+ uses WinterCG fetch, which rejects RN's { uri, name, type }
+      // FormData part shape ("Unsupported FormDataPart implementation"). Read the
+      // recording's raw bytes via expo-file-system and wrap them in a real Blob
+      // so the multipart upload serializes correctly on iOS.
+      const b64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const binary = globalThis.atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: mime });
+
+      const form = new FormData();
+      // Third arg (filename) is required so FastAPI's UploadFile.filename is set.
+      form.append("file", blob, name);
 
       const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/transcribe`, {
         method: "POST",
