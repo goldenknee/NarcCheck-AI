@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 10 — Apple 2.1(b) IAP review-screenshot verification + backend regression. 15/15 pytest PASS. (A) Paywall source (/app/frontend/app/paywall.tsx) confirmed to render prices purely from RevenueCat: annual.product.priceString (line 225), monthly.product.priceString (line 240), and CTA text `Continue — ${chosen.product.priceString}` (line 303). No hardcoded $ fallback anywhere in the file (regex-scan for priceString || '$...' returns no match). (B) All 4 IAP review screenshots exist at Apple's required resolutions: annual_6.7_1290x2796.png=1290x2796, monthly_6.7_1290x2796.png=1290x2796, annual_6.5_1242x2688.png=1242x2688, monthly_6.5_1242x2688.png=1242x2688; each file >100 KB. (C) OCR via tesseract 5.3.0 on each screenshot: annual screenshots contain `60` and DO NOT contain `79.99`; monthly screenshots contain `8.99` and DO NOT contain `9.99`. (D) README.md documents both product IDs (com.emergent.narcanalyzer.cslz18.pro.annual and .pro.monthly) with attachment instructions. (E) Backend regression pytest: /api/transcribe multipart 'file' PASS, /api/analyze mode=text PASS, /api/auth/apple invalid → 4xx PASS, /api/auth/session invalid → 4xx PASS, /api/history POST+GET scoped by X-Device-Id PASS. (F) Paywall smoke test at 390x844: paywall-close and paywall-purchase render; no raw error strings (PurchasesError/identity_not_ready/readable_error_code) in DOM. As explicitly instructed in the review request, the RC Test Store cache in browser preview still shows $79.99/$9.99 — this is intentionally NOT flagged as a bug per support_agent's guidance; real App Store prices come from ASC at deploy time and the source now reads them dynamically.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iap_screenshots.py",
+    "/app/backend/tests/test_paywall_verify.py",
+    "/app/test_reports/pytest/iteration_10_results.xml",
+    "/app/test_reports/iteration_10.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "paywall.tsx L225/L240/L303: prices bind directly to RC package priceString with no fallback string — App Store prices will always match the ASC-configured tier at review time.",
+    "paywall.tsx savings memo (L52-58) is derived from live prices; the 'Save X%' badge will auto-adjust if the price tier changes in ASC, so screenshots and app copy stay in sync.",
+    "README.md correctly documents 1290x2796 (6.7\") and 1242x2688 (6.5\") mapping to the two IAP product IDs — matches App Store Connect's Review Screenshot upload flow for auto-renewable subscriptions."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iap_screenshots.py"
+  ],
+  "success_rate": {"backend": "100% (5/5 regression + 10/10 IAP verification = 15/15)", "frontend": "100% (paywall renders, no raw error strings, testIDs present)"},
+  "seed_data_creation": "Per-run device-scoped history rows created and deleted by test_paywall_verify.py (X-Device-Id: TEST_...)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "IAP screenshots verified via tesseract OCR at /app/store_screenshots/iap/. If prices change again, regenerate screenshots and re-run: pytest /app/backend/tests/test_iap_screenshots.py -v (requires tesseract-ocr apt package + pytesseract pip). Paywall source is guaranteed price-agnostic; browser-preview Test Store cache showing $79.99/$9.99 is expected and MUST NOT be flagged per support_agent guidance. Do NOT add hardcoded price fallbacks to paywall.tsx — the test asserts their absence.",
+  "rca_of_issue": "N/A — verification-only iteration. Both parts of Apple's 2.1(b) rejection are now addressable: (1) friendly-error paywall verified previously (iteration 9), (2) IAP review screenshots exist at correct resolutions with correct final prices ($8.99 monthly / $60 annual) ready for ASC upload."
+}
