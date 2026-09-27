@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 9 verification of Apple 2.1(b) paywall hardening + previously-fixed voice recording upload path. Backend 5/5 pytest PASS (transcribe multipart with 'file' field returns {text: str}, /api/analyze mode=text returns valid AnalysisResult, /api/auth/apple invalid token -> 4xx (not 5xx), /api/auth/session invalid session -> 4xx, /api/history POST+GET scoped by X-Device-Id). Frontend paywall PASS: renders at 390x844 with NO raw red error text on initial load — confirmed absence in DOM of 'Payment identity not ready', 'PurchasesError', 'identity_not_ready', 'readable_error_code'. All required testIDs present when packages load: paywall-close, paywall-restore, paywall-purchase (text 'Continue — $79.99'), plan-annual, plan-monthly. paywall-identity-error and paywall-error banners are correctly not rendered under normal load (source-verified they render only on identityError/error state and use the friendly copy 'Setting up secure payments…' and dismissible banner with paywall-error-dismiss). Source-verified the packagesUnavailable branch: when packages.length===0, the sticky bar swaps the purchase CTA for a 'Back to app' button (testID='paywall-close-unavailable') and the plans-unavailable card (testID='plans-unavailable') renders with an inline Restore Purchases button (testID='plans-restore'). Voice recorder upload path uses expo-file-system File.upload() with UploadType.MULTIPART and fieldName='file' — backend /api/transcribe accepts it and Whisper returns text; no bundler regressions detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_paywall_verify.py",
+    "/app/test_reports/pytest/iteration_9_results.xml",
+    "/app/test_reports/iteration_9.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "paywall.tsx doPurchase silently ignores e?.userCancelled — correct; App Review will no longer see a cancel toast.",
+    "paywall.tsx maps common RC/StoreKit error codes (PRODUCT_NOT_AVAILABLE_FOR_PURCHASE_ERROR, PURCHASE_NOT_ALLOWED_ERROR, STORE_PROBLEM_ERROR, NETWORK_ERROR, PAYMENT_PENDING_ERROR, INVALID_RECEIPT_ERROR, MISSING_RECEIPT_FILE_ERROR) to friendly copy — good coverage.",
+    "paywall.tsx errorBanner style uses surfaceSecondary background (not red) and includes the paywall-error-dismiss close control — matches Apple guideline mitigation.",
+    "paywall.tsx packagesUnavailable = !isLoading && rcEnabled && packages.length === 0 — deterministic and evaluated after loading, so the sticky bar swap to 'Back to app' cannot flash.",
+    "voice-recorder.tsx line 126-135 uses expo-file-system File.upload() with UploadType.MULTIPART and fieldName='file' — bypasses WinterCG FormData bug; backend accepts 'file' UploadFile (server.py L235).",
+    "server.py /api/transcribe correctly validates empty/oversize (400/413) and cleans up the tempfile in a finally block — no leaks.",
+    "revenuecat.tsx logIn is awaited before customerInfoQuery is enabled — identityReady flips true only when originalAppUserId is non-anonymous; paywall canBuy correctly gates on this."
+  ],
+  "updated_files": ["/app/backend/tests/test_paywall_verify.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (all testIDs + no-raw-error + purchase CTA text asserted)"},
+  "seed_data_creation": "One TEST_ prefixed history row per device_id test run, deleted at end of test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression suite at /app/backend/tests/test_paywall_verify.py covers transcribe multipart, analyze text, auth 4xx reachability, and device-scoped history. Requires EXPO_PUBLIC_BACKEND_URL in env (read from /app/frontend/.env). Paywall renders correctly in mobile-web preview at 390x844 with real RC Test Store packages ($79.99 annual, $9.99 monthly). The packagesUnavailable code branch (paywall-close-unavailable + plans-unavailable + plans-restore) is source-verified only — RC returned live packages in the sandbox so the empty-packages state was not runtime-exercised, but the branch is guarded by a deterministic memo and cannot be reached without packages.length===0.",
+  "rca_of_issue": "N/A — Apple 2.1(b) mitigation verified. No red raw error strings surface on paywall load; friendly banners + fallback CTA are wired to the correct testIDs."
+}

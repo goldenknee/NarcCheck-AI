@@ -85,22 +85,47 @@ export default function Paywall() {
       await purchase(chosen);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e: any) {
-      const msg = e?.userCancelled ? null : e?.message ?? String(e);
-      if (msg) setError(msg);
+      // Silently ignore user cancellation — never surface it as an error.
+      if (e?.userCancelled) return;
+      // Map common StoreKit / RevenueCat error codes to friendly copy so the
+      // App Review team never sees a raw SDK error string.
+      const code: string | undefined = e?.code ?? e?.userInfo?.readable_error_code;
+      const friendly =
+        code === "PRODUCT_NOT_AVAILABLE_FOR_PURCHASE_ERROR" ||
+        code === "PURCHASE_NOT_ALLOWED_ERROR"
+          ? "This subscription isn't available on your account right now. Please try again later."
+        : code === "STORE_PROBLEM_ERROR" || code === "NETWORK_ERROR"
+          ? "We couldn't reach the App Store. Check your connection and try again."
+        : code === "PAYMENT_PENDING_ERROR"
+          ? "Your payment is pending approval from the App Store."
+        : code === "INVALID_RECEIPT_ERROR" || code === "MISSING_RECEIPT_FILE_ERROR"
+          ? "We couldn't verify your purchase. Try Restore Purchases."
+          : "We couldn't complete this purchase. Please try again.";
+      setError(friendly);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     }
   };
 
   const doRestore = async () => {
     setError(null);
     try {
-      await restore();
+      const info = await restore();
+      const active = (info as any)?.entitlements?.active ?? {};
+      if (Object.keys(active).length === 0) {
+        setError("No previous purchases were found on this Apple ID.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        return;
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e: any) {
-      setError(e?.message ?? "Restore failed");
+      if (e?.userCancelled) return;
+      setError("We couldn't restore your purchases. Please try again.");
     }
   };
 
-  const canBuy = !!chosen && identityReady && !isPurchasing && !isRestoring;
+  const packagesUnavailable = !isLoading && rcEnabled && packages.length === 0;
+  const canBuy =
+    !!chosen && identityReady && !isPurchasing && !isRestoring && !packagesUnavailable;
 
   return (
     <View style={styles.root}>
@@ -167,10 +192,28 @@ export default function Paywall() {
             </Text>
           </View>
         ) : packages.length === 0 ? (
-          <View style={styles.plansUnavailable}>
+          <View style={styles.plansUnavailable} testID="plans-unavailable">
+            <Ionicons name="hourglass-outline" size={22} color={colors.brandSecondary} />
+            <Text style={styles.plansUnavailableTitle}>Subscriptions loading</Text>
             <Text style={styles.plansUnavailableText}>
-              Subscription options are unavailable right now. Please try again later.
+              We couldn't load the subscription options right now. This can happen
+              briefly after an update. Please close this screen and try again in a
+              moment, or use Restore Purchases if you already subscribed.
             </Text>
+            <Pressable
+              onPress={doRestore}
+              style={styles.plansRestoreBtn}
+              testID="plans-restore"
+            >
+              {isRestoring ? (
+                <ActivityIndicator color={colors.onBrandPrimary} />
+              ) : (
+                <>
+                  <Ionicons name="refresh" size={16} color={colors.onBrandPrimary} />
+                  <Text style={styles.plansRestoreText}>Restore Purchases</Text>
+                </>
+              )}
+            </Pressable>
           </View>
         ) : (
           <View style={styles.plans}>
@@ -203,14 +246,25 @@ export default function Paywall() {
         )}
 
         {identityError ? (
-          <Text style={styles.errorText} testID="paywall-identity-error">
-            Payment identity not ready: {identityError}
-          </Text>
+          <View style={styles.errorBanner} testID="paywall-identity-error">
+            <Ionicons name="information-circle" size={16} color={colors.brandSecondary} />
+            <Text style={styles.errorBannerText}>
+              Setting up secure payments… Please retry in a moment.
+            </Text>
+          </View>
         ) : null}
         {error ? (
-          <Text style={styles.errorText} testID="paywall-error">
-            {error}
-          </Text>
+          <View style={styles.errorBanner} testID="paywall-error">
+            <Ionicons name="alert-circle" size={16} color={colors.brandPrimary} />
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <Pressable
+              onPress={() => setError(null)}
+              hitSlop={8}
+              testID="paywall-error-dismiss"
+            >
+              <Ionicons name="close" size={16} color={colors.muted} />
+            </Pressable>
+          </View>
         ) : null}
 
         <Text style={styles.finePrint}>
@@ -220,27 +274,38 @@ export default function Paywall() {
 
       {/* Sticky purchase bar */}
       <View style={[styles.ctaBar, { paddingBottom: Math.max(insets.bottom, 12) + 12 }]}>
-        <Pressable
-          onPress={doPurchase}
-          disabled={!canBuy}
-          style={({ pressed }) => [
-            styles.cta,
-            !canBuy && styles.ctaDisabled,
-            pressed && { opacity: 0.85 },
-          ]}
-          testID="paywall-purchase"
-        >
-          {isPurchasing ? (
-            <ActivityIndicator color={colors.onBrandPrimary} />
-          ) : (
-            <>
-              <Ionicons name="lock-open" size={18} color={colors.onBrandPrimary} />
-              <Text style={styles.ctaText}>
-                {chosen ? `Continue — ${chosen.product.priceString}` : "Continue"}
-              </Text>
-            </>
-          )}
-        </Pressable>
+        {packagesUnavailable ? (
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.ctaSecondary, pressed && { opacity: 0.85 }]}
+            testID="paywall-close-unavailable"
+          >
+            <Ionicons name="arrow-back" size={18} color={colors.onSurface} />
+            <Text style={styles.ctaSecondaryText}>Back to app</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={doPurchase}
+            disabled={!canBuy}
+            style={({ pressed }) => [
+              styles.cta,
+              !canBuy && styles.ctaDisabled,
+              pressed && { opacity: 0.85 },
+            ]}
+            testID="paywall-purchase"
+          >
+            {isPurchasing ? (
+              <ActivityIndicator color={colors.onBrandPrimary} />
+            ) : (
+              <>
+                <Ionicons name="lock-open" size={18} color={colors.onBrandPrimary} />
+                <Text style={styles.ctaText}>
+                  {chosen ? `Continue — ${chosen.product.priceString}` : "Continue"}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        )}
       </View>
 
       {/* Dev-only confirmation modal */}
@@ -409,12 +474,55 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  plansUnavailableTitle: {
+    color: colors.onSurface,
+    fontSize: 15,
+    fontWeight: "500",
+    marginTop: spacing.xs,
   },
   plansUnavailableText: {
     color: colors.muted,
     fontSize: 13,
     textAlign: "center",
     lineHeight: 19,
+  },
+  plansRestoreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+    minWidth: 180,
+  },
+  plansRestoreText: {
+    color: colors.onBrandPrimary,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  errorBannerText: {
+    color: colors.onSurface,
+    fontSize: 12,
+    lineHeight: 17,
+    flex: 1,
   },
   plans: { gap: spacing.md },
   planCard: {
@@ -519,6 +627,22 @@ const styles = StyleSheet.create({
   ctaDisabled: { backgroundColor: colors.surfaceTertiary },
   ctaText: {
     color: colors.onBrandPrimary,
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  ctaSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.pill,
+    paddingVertical: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  ctaSecondaryText: {
+    color: colors.onSurface,
     fontSize: 16,
     fontWeight: "500",
   },
