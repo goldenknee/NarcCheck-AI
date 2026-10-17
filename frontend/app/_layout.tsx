@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
 import { ErrorBoundary } from "@/src/components/error-boundary";
+import { WebFrame } from "@/src/components/web-frame";
 import { queryClient } from "@/src/query-client";
 import { colors } from "@/src/theme";
 import { SubscriptionProvider, initializeRevenueCat } from "@/src/lib/revenuecat";
@@ -41,18 +42,22 @@ export default function RootLayout() {
           <AuthProvider>
             <SubscriptionProvider>
               <StatusBar style="light" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.surface },
-                  animation: "fade",
-                }}
-              >
-                <Stack.Screen name="paywall" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
-                <Stack.Screen name="sign-in" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
-                <Stack.Screen name="settings" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
-                <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
-              </Stack>
+              <WebFrame>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.surface },
+                    animation: "fade",
+                  }}
+                >
+                  <Stack.Screen name="paywall" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                  <Stack.Screen name="sign-in" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                  <Stack.Screen name="settings" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                  <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
+                  <Stack.Screen name="billing/success" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                  <Stack.Screen name="billing/cancel" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                </Stack>
+              </WebFrame>
             </SubscriptionProvider>
           </AuthProvider>
         </QueryClientProvider>

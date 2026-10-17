@@ -154,10 +154,11 @@ export function VoiceRecorder({ onTranscript }: Props) {
   if (Platform.OS === "web") {
     return (
       <View style={styles.webNote} testID="voice-web-unavailable">
-        <Ionicons name="mic-off-outline" size={22} color={colors.muted} />
-        <Text style={styles.webNoteTitle}>Voice recording is not available in the browser preview.</Text>
+        <Ionicons name="phone-portrait-outline" size={22} color={colors.brandPrimary} />
+        <Text style={styles.webNoteTitle}>Voice notes are available in the iOS app.</Text>
         <Text style={styles.webNoteBody}>
-          Open the app in Expo Go on your phone (scan the QR code) to record a voice note.
+          For microphone recording and Whisper transcription on the go, grab NarcCheck AI on
+          the App Store. On web, you can analyse pasted text or uploaded screenshots.
         </Text>
       </View>
     );

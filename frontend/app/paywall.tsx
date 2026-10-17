@@ -17,6 +17,24 @@ import type { PurchasesPackage } from "react-native-purchases";
 
 import { colors, radius, spacing } from "@/src/theme";
 import { useSubscription, rcEnabled } from "@/src/lib/revenuecat";
+import { startStripeCheckout } from "@/src/lib/stripe-billing";
+import { useAuth } from "@/src/lib/auth";
+
+const IS_WEB = Platform.OS === "web";
+
+// On web, Stripe is the source of truth. We hard-render these plan values so
+// the paywall is usable even if Stripe hasn't been configured yet — the backend
+// will reject the actual checkout call with a clear error if the key is missing.
+const WEB_MONTHLY = {
+  identifier: "$rc_monthly",
+  product: { price: 8.99, priceString: "$8.99", title: "Monthly" },
+  stripePlan: "monthly" as const,
+};
+const WEB_ANNUAL = {
+  identifier: "$rc_annual",
+  product: { price: 60, priceString: "$60.00", title: "Annual" },
+  stripePlan: "yearly" as const,
+};
 
 const BENEFITS = [
   { icon: "infinite", title: "Unlimited analyses", body: "No more 3-analysis cap." },
@@ -46,8 +64,13 @@ export default function Paywall() {
     return cur.availablePackages ?? [];
   }, [offerings]);
 
-  const monthly = packages.find((p) => p.identifier === "$rc_monthly") ?? packages[0];
-  const annual = packages.find((p) => p.identifier === "$rc_annual") ?? packages[1];
+  // On web we skip RevenueCat entirely and render Stripe-backed plans.
+  const monthly = IS_WEB
+    ? (WEB_MONTHLY as unknown as PurchasesPackage & { stripePlan?: "monthly" | "yearly" })
+    : (packages.find((p) => p.identifier === "$rc_monthly") ?? packages[0]);
+  const annual = IS_WEB
+    ? (WEB_ANNUAL as unknown as PurchasesPackage & { stripePlan?: "monthly" | "yearly" })
+    : (packages.find((p) => p.identifier === "$rc_annual") ?? packages[1]);
 
   const savings = useMemo(() => {
     const m = monthly?.product.price;
@@ -67,10 +90,24 @@ export default function Paywall() {
 
   const chosen = selected === "annual" ? annual : monthly;
 
+  const { user } = useAuth();
+
   const doPurchase = async () => {
     if (!chosen) return;
     setError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    // Web uses Stripe-hosted Checkout; iOS uses RevenueCat / StoreKit.
+    if (IS_WEB) {
+      try {
+        const plan = selected === "annual" ? "yearly" : "monthly";
+        await startStripeCheckout(plan, user?.user_id ?? undefined);
+      } catch (e: any) {
+        setError(e?.message ?? "We couldn't start checkout. Please try again.");
+      }
+      return;
+    }
+
     if (__DEV__) {
       setDevConfirming(true);
       return;
@@ -123,7 +160,7 @@ export default function Paywall() {
     }
   };
 
-  const packagesUnavailable = !isLoading && rcEnabled && packages.length === 0;
+  const packagesUnavailable = !IS_WEB && !isLoading && rcEnabled && packages.length === 0;
   const canBuy =
     !!chosen && identityReady && !isPurchasing && !isRestoring && !packagesUnavailable;
 

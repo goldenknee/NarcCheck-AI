@@ -23,6 +23,7 @@ from auth import (
     ensure_indexes as ensure_auth_indexes,
     get_current_user_optional,
 )
+from billing import make_billing_router, ensure_products as ensure_billing_products
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -384,6 +385,7 @@ async def delete_history(
 
 app.include_router(api_router)
 app.include_router(make_auth_router(db), prefix="/api")
+app.include_router(make_billing_router(db), prefix="/api")
 
 
 @app.on_event("startup")
@@ -392,6 +394,10 @@ async def _startup():
         await ensure_auth_indexes(db)
     except Exception:
         logging.exception("auth index setup failed")
+    try:
+        await ensure_billing_products(db)
+    except Exception:
+        logging.exception("billing setup failed")
 
 app.add_middleware(
     CORSMiddleware,
