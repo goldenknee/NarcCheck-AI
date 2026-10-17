@@ -32,12 +32,21 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Stripe config
 # -----------------------------------------------------------------------------
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or os.environ.get("STRIPE_API_KEY", "")
+def _get_stripe_key() -> str:
+    """Lazy-read the Stripe key each call so dotenv-loaded env is honoured even
+    when billing.py was imported before load_dotenv() ran in server.py."""
+    key = os.environ.get("STRIPE_SECRET_KEY") or os.environ.get("STRIPE_API_KEY") or ""
+    if key == "sk_test_emergent":  # Emergent placeholder → treat as unset
+        return ""
+    return key
 
-# Treat the Emergent placeholder as unset so we fail fast with a clear message
-# instead of sending gibberish to api.stripe.com.
-if stripe.api_key in ("sk_test_emergent", ""):
-    stripe.api_key = ""
+
+def _is_stripe_configured() -> bool:
+    key = _get_stripe_key()
+    if key:
+        stripe.api_key = key
+        return True
+    return False
 
 PRODUCT_NAME = "NarcCheck Pro"
 PRICE_MONTHLY_CENTS = 899   # $8.99
@@ -66,8 +75,8 @@ async def ensure_products(db) -> None:
     Caches the resolved price IDs in the module-level _PRICE_IDS so checkout
     doesn't hit Stripe product APIs on every request.
     """
-    if not stripe.api_key:
-        logger.warning("STRIPE_API_KEY unset; Stripe billing disabled.")
+    if not _is_stripe_configured():
+        logger.warning("STRIPE_SECRET_KEY unset; Stripe billing disabled.")
         return
 
     try:
@@ -177,7 +186,7 @@ def make_billing_router(db) -> APIRouter:
         x_device_id: Optional[str] = Header(None),
     ):
         device_id = _require_device(x_device_id)
-        if not stripe.api_key:
+        if not _is_stripe_configured():
             raise HTTPException(503, "Billing not configured")
         price_id = _PRICE_IDS.get(body.plan)
         if not price_id:
@@ -209,7 +218,7 @@ def make_billing_router(db) -> APIRouter:
         """Called by the success page. Confirms payment with Stripe (source of
         truth) and grants the entitlement if everything checks out."""
         device_id = _require_device(x_device_id)
-        if not stripe.api_key:
+        if not _is_stripe_configured():
             raise HTTPException(503, "Billing not configured")
         try:
             session = stripe.checkout.Session.retrieve(session_id, expand=["subscription"])
@@ -249,7 +258,7 @@ def make_billing_router(db) -> APIRouter:
     @router.post("/portal")
     async def portal(x_device_id: Optional[str] = Header(None)):
         device_id = _require_device(x_device_id)
-        if not stripe.api_key:
+        if not _is_stripe_configured():
             raise HTTPException(503, "Billing not configured")
         row = await db.pro_entitlements.find_one({"device_id": device_id})
         if not row or not row.get("stripe_customer_id"):

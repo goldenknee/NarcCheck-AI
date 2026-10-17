@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 11 — Stripe BYOK web checkout verification. Backend 11/11 pytest PASS (/app/backend/tests/test_billing_stripe.py). Verified: (a) Stripe products initialized on startup — logs show 'Stripe prices ready: monthly=price_1URgxfIBA9UCVOAfDmrj692E yearly=price_1URgxfIBA9UCVOAfqKy7ulOF'; (b) POST /api/billing/checkout {plan:monthly, X-Device-Id} → 200 with https://checkout.stripe.com/c/pay/cs_test_... URL; (c) plan=yearly returns distinct cs_test_ session; (d) missing X-Device-Id → 400; (e) invalid plan 'lifetime' → 422; (f) GET /api/billing/status unknown device → {status:'inactive'}; (g) GET /api/billing/verify ?session_id=cs_test_bogus → 404; (h) Regression PASS: /api/analyze mode=text, /api/transcribe multipart, /api/history POST+GET scoped by X-Device-Id; /api/auth/apple + /api/auth/google 4xx on invalid tokens. Frontend web verified: /billing/cancel renders with testIDs billing-cancel-retry + billing-cancel-home; /billing/success without session_id shows error state + billing-success-done; /billing/success?session_id=... shows 'Confirming your purchase…' state during verify (screenshot confirms); desktop 1280x820 renders WebFrame with 'NARCCHECK AI' badge + 'See through the argument.' hero + feature list + phone frame; mobile 390x844 renders no WebFrame; paywall-purchase + paywall-close testIDs exist. HOWEVER two frontend bugs detected on /paywall at web: (1) the two plan cards ($8.99 Monthly / $60.00 Annual) do NOT render because the render tree is still gated on rcEnabled/packages.length checks that are false on web — only the sticky 'Continue — $60.00' button is visible, so users CANNOT select the monthly plan and the hardcoded $8.99 never appears in the DOM; (2) the 'Setting up secure payments… Please retry in a moment.' identityError banner shows on web even though RC is intentionally bypassed — this is misleading and reduces trust during review. These must be fixed before shipping web checkout.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "paywall.tsx",
+        "issue": "On web (Platform.OS==='web'), the plan cards block is never rendered because the surrounding guards (!rcEnabled, packages.length===0, isLoading) all evaluate against RC state which is intentionally off on web. Result: only the sticky Continue CTA is visible — monthly plan ($8.99) cannot be selected and $8.99 is absent from the DOM. The IS_WEB branch populates monthly/annual via WEB_MONTHLY/WEB_ANNUAL but the JSX gates at paywall.tsx:221-283 ignore IS_WEB. Fix: wrap the plan-cards block in `IS_WEB || (!isLoading && rcEnabled && packages.length>0)` or short-circuit the RC gates when IS_WEB. Reference: /app/frontend/app/paywall.tsx:221-283.",
+        "testID": "plan-monthly / plan-annual",
+        "priority": "HIGH"
+      },
+      {
+        "component": "paywall.tsx",
+        "issue": "The identityError banner ('Setting up secure payments… Please retry in a moment.') renders on web because RC never initialises (keys blank by design). Should be suppressed when IS_WEB. Reference: /app/frontend/app/paywall.tsx:285-292.",
+        "testID": "paywall-identity-error",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_billing_stripe.py",
+    "/app/test_reports/pytest/iteration_11_results.xml",
+    "/app/test_reports/iteration_11.json"
+  ],
+  "action_items": [
+    "paywall.tsx — on IS_WEB, bypass the rcEnabled / isLoading / packages.length guards so the two plan cards (Monthly $8.99 / Annual $60.00) always render. Users on web currently cannot select Monthly.",
+    "paywall.tsx — hide the identityError banner when IS_WEB (RC is intentionally disabled on web, so its 'Setting up secure payments…' message is misleading).",
+    "Optional: on web, also suppress the 'Payments go through Apple.' fine-print line (currently rendered on web too — see paywall.tsx:307-309). Should read 'Payments are processed securely by Stripe.' when IS_WEB."
+  ],
+  "critical_code_review_comments": [
+    "billing.py _get_stripe_key() correctly treats 'sk_test_emergent' sentinel as unset and lazy-reads env on each call — survives reload ordering with dotenv.",
+    "billing.py ensure_products() is idempotent (lookup-by-name for product, lookup-by-amount+interval for prices); safe to re-run on every boot.",
+    "billing.py verify_session() correctly cross-checks session.metadata.device_id against caller's X-Device-Id to prevent cross-device entitlement grants (line 230-232).",
+    "stripe-billing.ts falls back to 'web-unknown' device id if AsyncStorage key is missing; this still passes the 6-200 char validation but will collide across first-time visitors. Consider generating a UUID on first paywall load and persisting it. Non-blocking for MVP.",
+    "paywall.tsx 'Recurring billing. Cancel anytime in your App Store settings. Payments go through Apple.' fine-print is Apple-specific — on web it should mention Stripe/portal instead."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_billing_stripe.py",
+    "/app/test_reports/iteration_11.json",
+    "/app/test_reports/pytest/iteration_11_results.xml"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "80% — testIDs & screens render; paywall plan-cards + identity-error gating bugs"},
+  "seed_data_creation": "Per-run TEST_DEV_* and TEST_HIST_* device-scoped rows in pro_entitlements/history. Non-destructive.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After E1 fixes the two paywall.tsx bugs, re-run: (1) load /paywall at viewport 390x844 and assert both '$8.99' and '$60.00' text appear + testIDs plan-monthly and plan-annual exist + no 'Setting up secure payments…' text; (2) click plan-monthly then paywall-purchase and verify the fetch body sends plan:'monthly'; (3) backend regression already covered by /app/backend/tests/test_billing_stripe.py — no changes expected there. Note: the EXPO_PUBLIC_BACKEND_URL env var is what the frontend uses (not EXPO_BACKEND_URL); backend_test uses the same key.",
+  "rca_of_issue": "RCA for frontend paywall bug: paywall.tsx was originally RC-only. The web port added IS_WEB-gated data (WEB_MONTHLY/WEB_ANNUAL at L28-37) and an IS_WEB branch in doPurchase (L101-109), but the JSX gating that decides WHETHER to render plan cards (L221-283) was not updated. On web, rcEnabled is false (keys blank by design), so the branch '!rcEnabled → Subscriptions only available in the mobile app' is taken, which hides the plan cards entirely. The hardcoded WEB prices are therefore computed and bound to the Continue CTA (visible as '$60.00') but never rendered as PlanCard components. Fix is a one-line gate change: short-circuit the RC guards when IS_WEB. Reproduction: open /paywall in a web browser → observe only Continue button, no plan selector."
+}

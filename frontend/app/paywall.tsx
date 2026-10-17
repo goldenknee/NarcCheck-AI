@@ -218,17 +218,17 @@ export default function Paywall() {
         </View>
 
         {/* Plan selector */}
-        {isLoading ? (
+        {isLoading && !IS_WEB ? (
           <View style={styles.plansLoading}>
             <ActivityIndicator color={colors.brandPrimary} />
           </View>
-        ) : !rcEnabled ? (
+        ) : !rcEnabled && !IS_WEB ? (
           <View style={styles.plansUnavailable}>
             <Text style={styles.plansUnavailableText}>
               Subscriptions are only available in the mobile app.
             </Text>
           </View>
-        ) : packages.length === 0 ? (
+        ) : packages.length === 0 && !IS_WEB ? (
           <View style={styles.plansUnavailable} testID="plans-unavailable">
             <Ionicons name="hourglass-outline" size={22} color={colors.brandSecondary} />
             <Text style={styles.plansUnavailableTitle}>Subscriptions loading</Text>
@@ -282,7 +282,8 @@ export default function Paywall() {
           </View>
         )}
 
-        {identityError ? (
+        {/* Identity banner is RevenueCat-specific — never shown on web. */}
+        {identityError && !IS_WEB ? (
           <View style={styles.errorBanner} testID="paywall-identity-error">
             <Ionicons name="information-circle" size={16} color={colors.brandSecondary} />
             <Text style={styles.errorBannerText}>
@@ -305,7 +306,9 @@ export default function Paywall() {
         ) : null}
 
         <Text style={styles.finePrint}>
-          Recurring billing. Cancel anytime in your App Store settings. Payments go through Apple.
+          {IS_WEB
+            ? "Recurring billing. Cancel anytime from the Billing Portal. Payments are securely processed by Stripe."
+            : "Recurring billing. Cancel anytime in your App Store settings. Payments go through Apple."}
         </Text>
       </ScrollView>
 

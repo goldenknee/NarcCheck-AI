@@ -29,6 +29,9 @@ function getRevenueCatApiKey(): string {
 
 export function initializeRevenueCat() {
   if (!rcEnabled) return;
+  // On web we use Stripe-hosted Checkout — skip RC init entirely rather than
+  // throwing "RevenueCat public API keys not found" into the console.
+  if (Platform.OS === "web") return;
   Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
   Purchases.configure({ apiKey: getRevenueCatApiKey() });
 }

@@ -1,0 +1,22 @@
+{
+  "summary": "Retested paywall.tsx fixes on web (390x844). All 5 verification criteria PASS: (1) Both plan cards render — plan-annual shows '$60.00' with 'BEST VALUE' and 'Save 44%' subtitle, plan-monthly shows '$8.99'. (2) Tapping plan-monthly switches selection; sticky Continue button updates from 'Continue — $60.00' to 'Continue — $8.99'. (3) paywall-identity-error banner is NOT present on web (correctly gated by !IS_WEB). (4) Fine-print contains 'Payments are securely processed by Stripe.' and does NOT contain 'Payments go through Apple'. (5) No regressions — paywall-purchase, paywall-close, paywall-restore testIDs all present and visible.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Note (non-blocking): RevenueCat initialisation on web logs a warning 'RevenueCat public API keys not found — run the Setup section first'. This is expected since RC is intentionally disabled on web, but consider short-circuiting initializeRevenueCat() when Platform.OS === 'web' to avoid noisy console warnings on every page load."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not retested per request)", "frontend": "100%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Paywall on web is fully functional. Both plan cards render unconditionally via WEB_MONTHLY / WEB_ANNUAL hard-coded fallbacks. Fine-print branches correctly on IS_WEB. identity-error banner is gated by !IS_WEB. Selection toggle updates the sticky CTA price correctly. No further frontend changes required for this fix.",
+  "rca_of_issue": "n/a — fix verified."
+}
