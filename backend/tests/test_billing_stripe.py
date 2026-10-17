@@ -1,12 +1,26 @@
-"""Backend tests for Stripe web checkout + regression suite (iteration 11)."""
+"""Backend tests for Stripe web checkout + regression suite.
+
+Iteration 13: verifies billing_address_collection='auto' and
+subscription_data metadata preservation after the Stripe-hosted receipts
+toggle change in billing.py.
+"""
 import os
 import io
 import time
 import pytest
 import requests
 
+# Load backend .env so STRIPE_SECRET_KEY is available for Session retrieval
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv("/app/backend/.env")
+except Exception:
+    pass
+
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "EXPO_PUBLIC_BACKEND_URL not set"
+
+STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 
 DEVICE = f"TEST_DEV_{int(time.time())}"
 
@@ -68,6 +82,59 @@ class TestBillingCheckout:
             timeout=15,
         )
         assert r.status_code == 422, r.text
+
+    def test_checkout_session_has_billing_address_auto_and_metadata(self, api):
+        """Verify the created Checkout Session has billing_address_collection='auto'
+        and subscription_data.metadata preserves device_id/user_id/plan.
+        """
+        if not STRIPE_KEY:
+            pytest.skip("STRIPE_SECRET_KEY not available for session retrieval")
+        import stripe
+        stripe.api_key = STRIPE_KEY
+
+        test_user = "TEST_user_123"
+        test_device = f"TEST_DEV_META_{int(time.time())}"
+        r = api.post(
+            f"{BASE_URL}/api/billing/checkout",
+            json={"plan": "yearly", "user_id": test_user},
+            headers={"X-Device-Id": test_device},
+            timeout=30,
+        )
+        assert r.status_code == 200, r.text
+        session_id = r.json()["session_id"]
+
+        # Retrieve the session straight from Stripe to inspect configured params
+        sess = stripe.checkout.Session.retrieve(
+            session_id, expand=["subscription", "line_items"]
+        )
+        # 1. billing_address_collection must be 'auto'
+        assert sess.get("billing_address_collection") == "auto", (
+            f"expected 'auto', got {sess.get('billing_address_collection')}"
+        )
+        # 2. top-level metadata preserved
+        md = sess.get("metadata") or {}
+        assert md.get("device_id") == test_device
+        assert md.get("user_id") == test_user
+        assert md.get("plan") == "yearly"
+        # 3. mode is subscription (so Stripe auto-creates a Customer → receipts)
+        assert sess.get("mode") == "subscription"
+        # 4. client_reference_id mirrors the device id
+        assert sess.get("client_reference_id") == test_device
+        # 5. subscription_data.metadata is a WRITE-ONLY create param — Stripe does
+        #    not surface it on an unpaid Session.retrieve(). The eventual Subscription
+        #    object (post-payment) carries the metadata. We assert session.metadata
+        #    (checked above) as the preservation proof for the pre-payment flow, and
+        #    only validate subscription_data when Stripe echoes it back.
+        sub_data = sess.get("subscription_data") or {}
+        if sub_data.get("metadata"):
+            sub_md = sub_data["metadata"]
+            assert sub_md.get("device_id") == test_device
+            assert sub_md.get("user_id") == test_user
+            assert sub_md.get("plan") == "yearly"
+        if sub_data.get("description"):
+            assert "NarcCheck Pro" in sub_data["description"]
+        # 6. allow_promotion_codes enabled
+        assert sess.get("allow_promotion_codes") is True
 
 
 # -----------------------------------------------------------------

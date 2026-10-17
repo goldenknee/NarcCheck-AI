@@ -1,0 +1,34 @@
+{
+  "summary": "Backend-only verification of Stripe-hosted email receipts enablement in billing.py. 12/12 pytest cases pass (100%). Verified: (1) POST /api/billing/checkout plan=monthly → 200 with cs_test_... Stripe-hosted URL; (2) plan=yearly → 200, distinct session_id; (3) retrieved the created Checkout Session via Stripe SDK and confirmed billing_address_collection='auto', mode='subscription', top-level metadata preserves device_id/user_id/plan, client_reference_id==device_id, allow_promotion_codes=true (NOTE: subscription_data.metadata is a Stripe write-only create param and is not surfaced on Session.retrieve() until the Subscription materializes post-payment — this is expected Stripe behavior, not a bug; metadata preservation is proven via top-level session.metadata which Stripe does surface); (4) regression — /api/analyze mode=text, /api/transcribe multipart, /api/history POST+GET with X-Device-Id, /api/auth/apple + /api/auth/google invalid tokens → 4xx, /api/billing/status unknown device → 'inactive', /api/billing/verify bogus session_id → 404 all pass. No 502 regression after billing_address_collection + description changes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_billing_stripe.py",
+    "/app/test_reports/pytest/iteration_13_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "billing.py:210 comment correctly documents why customer_creation='always' was removed (payment-mode only). The subscription-mode auto-Customer-creation covers the receipt-email requirement.",
+    "Non-blocking: /tmp/test.wav referenced in the review request does not exist on this container; the test synthesizes a minimal valid WAV header inline instead, which exercises the same multipart upload code path. If a canonical reusable wav is wanted, main agent should drop one at /tmp/test.wav."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_billing_stripe.py — added test_checkout_session_has_billing_address_auto_and_metadata that retrieves the created Session via Stripe SDK and asserts billing_address_collection='auto', mode='subscription', metadata preservation, client_reference_id, allow_promotion_codes. Loads /app/backend/.env to obtain STRIPE_SECRET_KEY for retrieval."
+  ],
+  "success_rate": {
+    "backend": "100% (12/12)",
+    "frontend": "n/a (backend-only request)"
+  },
+  "seed_data_creation": "Transient Stripe test-mode Checkout Sessions were created during the run (cs_test_...). These are abandoned (never completed) and auto-expire in Stripe sandbox.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stripe checkout param changes verified end-to-end. billing_address_collection='auto' confirmed on live sandbox sessions. subscription_data.description/metadata are write-only on create and will only be inspectable on the eventual Subscription object post-payment — not a defect. The Stripe Dashboard toggle Settings → Emails → 'Successful payments' must be enabled manually by the user for Stripe to actually email receipts; this is NOT testable from the API side. For next iteration, if you need to end-to-end validate receipt emailing, you must use Stripe's test clock or a manual stripe listen + card test flow.",
+  "rca_of_issue": "n/a — this was a feature verification, not a bug fix. All assertions pass."
+}

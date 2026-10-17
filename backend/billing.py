@@ -202,7 +202,12 @@ def make_billing_router(db) -> APIRouter:
                 metadata={"device_id": device_id, "user_id": body.user_id or "", "plan": body.plan},
                 subscription_data={
                     "metadata": {"device_id": device_id, "user_id": body.user_id or "", "plan": body.plan},
+                    "description": "NarcCheck Pro — receipt and invoice will be emailed automatically.",
                 },
+                # Note: Checkout in subscription mode ALWAYS creates a Customer
+                # automatically — the collected email is persisted on that
+                # Customer, so Stripe can email receipts for every renewal.
+                billing_address_collection="auto",
                 allow_promotion_codes=True,
             )
             return {"url": session.url, "session_id": session.id}
