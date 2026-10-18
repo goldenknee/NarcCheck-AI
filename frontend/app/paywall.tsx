@@ -310,9 +310,11 @@ export default function Paywall() {
             ? "Recurring billing. Cancel anytime from the Billing Portal. Payments are securely processed by Stripe."
             : "Recurring billing. Cancel anytime in your App Store settings. Payments go through Apple."}
         </Text>
+        {/* Add bottom padding so sticky CTA + legal row don't cover the fine-print on short screens. */}
+        <View style={{ height: 180 }} />
       </ScrollView>
 
-      {/* Sticky purchase bar */}
+      {/* Sticky purchase bar — includes legal links so they're always visible and tappable. */}
       <View style={[styles.ctaBar, { paddingBottom: Math.max(insets.bottom, 12) + 12 }]}>
         {packagesUnavailable ? (
           <Pressable
@@ -346,6 +348,25 @@ export default function Paywall() {
             )}
           </Pressable>
         )}
+        <View style={styles.legalRow}>
+          <Pressable
+            onPress={() => router.push("/legal/terms")}
+            hitSlop={16}
+            style={styles.legalTap}
+            testID="paywall-terms"
+          >
+            <Text style={styles.legalLink}>Terms</Text>
+          </Pressable>
+          <Text style={styles.legalDot}>·</Text>
+          <Pressable
+            onPress={() => router.push("/legal/privacy")}
+            hitSlop={16}
+            style={styles.legalTap}
+            testID="paywall-privacy"
+          >
+            <Text style={styles.legalLink}>Privacy</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Dev-only confirmation modal */}
@@ -643,6 +664,31 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     textAlign: "center",
     marginTop: spacing.xl,
+  },
+  legalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  legalTap: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legalLink: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "500",
+    textDecorationLine: "underline",
+  },
+  legalDot: {
+    color: colors.muted,
+    fontSize: 12,
   },
   ctaBar: {
     position: "absolute",

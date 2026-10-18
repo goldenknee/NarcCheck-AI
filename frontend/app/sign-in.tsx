@@ -136,6 +136,28 @@ export default function SignInScreen() {
         <Pressable onPress={() => router.back()} style={styles.laterBtn} testID="sign-in-later">
           <Text style={styles.laterBtnText}>Keep using anonymously</Text>
         </Pressable>
+
+        <View style={styles.legalRow}>
+          <Text style={styles.legalPrefix}>By continuing, you agree to our </Text>
+          <Pressable
+            onPress={() => router.push("/legal/terms")}
+            hitSlop={16}
+            style={styles.legalTap}
+            testID="signin-terms"
+          >
+            <Text style={styles.legalLink}>Terms</Text>
+          </Pressable>
+          <Text style={styles.legalPrefix}> and </Text>
+          <Pressable
+            onPress={() => router.push("/legal/privacy")}
+            hitSlop={16}
+            style={styles.legalTap}
+            testID="signin-privacy"
+          >
+            <Text style={styles.legalLink}>Privacy Policy</Text>
+          </Pressable>
+          <Text style={styles.legalPrefix}>.</Text>
+        </View>
       </View>
     </View>
   );
@@ -264,5 +286,31 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     fontWeight: "500",
+  },
+  legalRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  legalTap: {
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  legalPrefix: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  legalLink: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "500",
+    textDecorationLine: "underline",
   },
 });

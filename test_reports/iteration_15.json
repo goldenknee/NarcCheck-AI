@@ -1,0 +1,73 @@
+{
+  "summary": "Tested the new Terms of Service and Privacy Policy pages + navigation from paywall and sign-in + backend regression. BACKEND: 12/12 pytest cases pass (billing LIVE Stripe checkout monthly/yearly + metadata + livemode, /api/analyze text + image, /api/transcribe multipart, /api/history POST+GET+DELETE with X-Device-Id, /api/auth/apple + /api/auth/google invalid-token 4xx, /api/billing/status unknown device inactive, /api/billing/verify bogus 404). FRONTEND: /legal/terms and /legal/privacy render correctly with ALL required keywords (Terms: 'Terms of Service', 'EFFECTIVE OCTOBER 2026', 'Who we are', 'important disclaimer', 'Subscriptions, billing, and refunds', 'Limitation of liability'; Privacy: 'Privacy Policy', 'Short version', 'What we collect', 'Who processes your data on our behalf', 'OpenAI', 'Stripe', 'Apple', 'Google', 'MongoDB Atlas', 'Emergent', 'How long we keep it', 'Your rights'). testID='legal-close' back button is present on both pages and navigates back to the previous route. sign-in agreement row ('By continuing, you agree to our Terms and Privacy Policy.') is rendered with testIDs 'signin-terms' and 'signin-privacy' — both NAVIGATE correctly to /legal/terms and /legal/privacy respectively. ONE REAL BUG FOUND: paywall-terms and paywall-privacy are present in DOM but are visually/physically covered by the sticky purchase CTA bar (position:absolute; bottom:0; backgroundColor rgba(9,9,11,0.92)). document.elementFromPoint at the center of paywall-terms returns the ctaBar <div>, not the Pressable. A real user tap at that pixel location hits the CTA bar overlay instead of the Terms link, so the link is effectively dead on mobile viewport 390x844. The links only became reachable via programmatic .click() that bypasses hit-testing. Settings legal links (privacy-link, terms-link) code review confirms they now use router.push('/legal/*') instead of the previous external narccheckai.app URLs — not UI-tested because sign-in is required and testing agent cannot complete Apple/Google OAuth, but the code change is correct.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "paywall.tsx legalRow",
+        "issue": "Terms and Privacy Pressables are covered by the sticky purchase CTA bar overlay. The CTA bar is position:absolute; bottom:0 with 92% opaque background and sits on top of the lower part of the ScrollView; the legalRow is rendered just before the fine-print at the end of the ScrollView content. On a 390x844 viewport the legalRow ends up at y≈758 and the CTA bar occupies roughly y≈730-844, so a user tap at the link's pixel coordinates hits the CTA bar instead of the Pressable. elementFromPoint confirms this: returns the ctaBar <div class=\"... r-bottom-1p0dtai r-position-u8s1d\"> instead of the paywall-terms node. Clicks only navigate when fired via JS .click() (which bypasses pointer hit-testing). Fix: either move the legalRow out of the ScrollView and into the ctaBar footer, OR raise the ScrollView's paddingBottom from 220 to ~300 so the links are pushed above the sticky bar, OR give the legalRow an explicit marginBottom equal to the CTA bar height. Reference: /app/frontend/app/paywall.tsx:174-181 (ScrollView paddingBottom:220) and 314-330 (legalRow) and 683-693 (ctaBar position:absolute bottom:0).",
+        "testID": "paywall-terms, paywall-privacy",
+        "priority": "HIGH"
+      },
+      {
+        "component": "sign-in.tsx signin-terms / signin-privacy touch target",
+        "issue": "The Terms and Privacy Pressables in the sign-in legal row render with a bounding box of only ~30x16 px (text-only, no padding). Even with hitSlop={10} the effective tap area is ~50x36 — below the recommended 44x44 minimum touch target. The sign-in flow still worked in automation because Playwright click resolves to the Pressable's inner span, but on-device the targets are small. Not a blocker; the Pressables navigate correctly. Reference: /app/frontend/app/sign-in.tsx:140-158.",
+        "testID": "signin-terms, signin-privacy",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Paywall → Terms/Privacy",
+        "issue": "Links exist in DOM and have correct onPress handlers, but are visually blocked by the sticky CTA bar so users cannot tap them in practice (Stripe-compliance concern: if Stripe requires accessible legal links on the paywall, this effectively fails that requirement).",
+        "affected_testIDs": ["paywall-terms", "paywall-privacy"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "paywall",
+        "issues": [
+          "Sticky CTA bar overlaps the legalRow — tap-blocking overlay bug (see ui_bugs above)",
+          "Fine-print + legal row are inside the scroll content immediately after the plan cards, so even when the user scrolls to the bottom the CTA bar still covers them because the CTA bar is absolute-positioned on top of the viewport"
+        ]
+      },
+      {
+        "screen": "sign-in",
+        "issues": [
+          "Legal row touch targets are smaller than the 44x44 minimum; consider wrapping each Pressable with paddingHorizontal/paddingVertical or using a larger hitSlop (e.g., 16)"
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/iteration_15_results.xml",
+    "/app/backend/tests/test_billing_stripe.py",
+    "/app/backend/tests/backend_test.py"
+  ],
+  "action_items": [
+    "Fix paywall legal link tap-blocking: move the <View style={styles.legalRow}> + <Text style={styles.finePrint}> out of the inner ScrollView and render them INSIDE the sticky ctaBar (above the Continue button), OR increase the ScrollView contentContainerStyle.paddingBottom from 220 to ~300 and keep the legalRow where it is so that scrolling actually pushes the links above the CTA bar on a 390x844 viewport. Current implementation ships dead paywall-terms / paywall-privacy links on mobile.",
+    "Enlarge sign-in legal row touch targets to ≥44x44 (add paddingVertical:12 paddingHorizontal:6 to signin-terms / signin-privacy Pressables, or bump hitSlop from 10 to 16).",
+    "Main agent should manually smoke-test Settings → Privacy Policy / Terms of Service rows after signing in with Apple/Google — code change looks correct (router.push to /legal/*) but could not be exercised by this testing agent due to inability to complete OAuth. Expected: both rows navigate to the in-app /legal/* routes and NEVER open an external narccheckai.app URL."
+  ],
+  "critical_code_review_comments": [
+    "legal-page.tsx is a clean shared layout (SafeAreaView via useSafeAreaInsets, dark-mode themed, ScrollView, back Pressable with hitSlop and testID 'legal-close'). COMPANY_NAME/SUPPORT_EMAIL/LEGAL_EFFECTIVE_DATE are centralised constants — good.",
+    "Both /legal/terms and /legal/privacy are registered in app/_layout.tsx as modal Stack.Screens with slide_from_bottom animation (lines 59-60) — route registration is correct.",
+    "Settings legal rows (privacy-link / terms-link) correctly call router.push('/legal/privacy') and router.push('/legal/terms') — the external-URL regression described in the review request has been fixed. Reference: /app/frontend/app/settings.tsx:208 and :222.",
+    "paywall.tsx legalRow is placed INSIDE the ScrollView just before the CTA bar — this is the root cause of the tap-blocking overlay bug; it should either live inside the ctaBar footer (preferred, so the links are always visible without scrolling) or the ScrollView padding needs to be large enough that the row scrolls above the sticky bar.",
+    "Backend regression unchanged; no backend edits in this iteration."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (12/12)",
+    "frontend": "70% — content/routes/back-button/sign-in links all pass; paywall legal links fail due to overlay bug; settings links not UI-tested (auth required) but code review confirms correct implementation"
+  },
+  "seed_data_creation": "None. One transient Stripe LIVE Checkout Session was created by the regression suite (cs_live_...) but never completed — auto-expires in Stripe.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend is green and does not need re-running unless billing code changes. For the paywall-terms/paywall-privacy tap-blocking bug, verify the fix by: 1) opening /paywall on viewport 390x844, 2) scrolling to the fine-print, 3) calling document.elementFromPoint() at the center of [data-testid=paywall-terms] — it MUST return the Pressable or an ancestor WITH testid=paywall-terms, NOT the ctaBar div. For sign-in legal row, verify bounding box width*height ≥ 44*44 or hitSlop expands effective area to ≥44x44. Settings legal rows require sign-in — if the testing agent can obtain a valid Apple/Google test token, verify that tapping privacy-link / terms-link navigates to /legal/privacy and /legal/terms IN-APP (no external navigation / no window.open to narccheckai.app).",
+  "rca_of_issue": "Paywall legal link tap-blocking RCA: paywall.tsx wraps all plan-selector + benefits + legalRow + finePrint content inside a <ScrollView> whose contentContainerStyle.paddingBottom is 220 + insets.bottom. A sticky purchase bar (<View style={styles.ctaBar}>) is rendered as a sibling of the ScrollView with position:absolute; left:0; right:0; bottom:0; and ~90px of vertical padding. On a 390x844 viewport the ctaBar occupies approximately y=730-844, i.e. the bottom ~114 px of the viewport. The ScrollView's inner content is scrollable, but the LEGAL ROW sits just BEFORE the finePrint at the end of the content, with no additional bottom spacing beyond the ScrollView padding. When the user scrolls to the bottom, the legalRow lands behind the sticky CTA bar at y≈758, well within the CTA bar's absolute-positioned area. document.elementFromPoint confirms the CTA bar <div> is on top at that pixel. Pressables under the CTA bar never receive synthetic 'click' events from real taps. Reproduction: visit https://narc-analyzer.preview.emergentagent.com/paywall at viewport 390x844, scroll to bottom, attempt to tap 'Terms' — nothing happens. Mitigation (recommended): render the <legalRow> and <finePrint> INSIDE the ctaBar <View> above the Continue button so they are always visible AND always on top. Alternative mitigation: bump ScrollView contentContainerStyle.paddingBottom from 220 to ≥320 so the legalRow scrolls fully above the sticky bar — but this leaves them hidden until the user scrolls, which is worse UX than putting them in the ctaBar."
+}

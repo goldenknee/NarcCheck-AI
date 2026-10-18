@@ -205,7 +205,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionLabel}>LEGAL</Text>
           <View style={styles.card}>
             <Pressable
-              onPress={() => Linking.openURL("https://narccheckai.app/privacy").catch(() => {})}
+              onPress={() => router.push("/legal/privacy")}
               style={styles.rowBetween}
               testID="privacy-link"
             >
@@ -215,11 +215,11 @@ export default function SettingsScreen() {
                 </View>
                 <Text style={styles.rowTitle}>Privacy Policy</Text>
               </View>
-              <Ionicons name="open-outline" size={16} color={colors.muted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
             </Pressable>
             <View style={styles.hairline} />
             <Pressable
-              onPress={() => Linking.openURL("https://narccheckai.app/terms").catch(() => {})}
+              onPress={() => router.push("/legal/terms")}
               style={styles.rowBetween}
               testID="terms-link"
             >
@@ -229,11 +229,11 @@ export default function SettingsScreen() {
                 </View>
                 <Text style={styles.rowTitle}>Terms of Service</Text>
               </View>
-              <Ionicons name="open-outline" size={16} color={colors.muted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
             </Pressable>
             <View style={styles.hairline} />
             <Pressable
-              onPress={() => Linking.openURL("mailto:support@narccheckai.app").catch(() => {})}
+              onPress={() => Linking.openURL("mailto:support@narccheckai.com").catch(() => {})}
               style={styles.rowBetween}
               testID="support-link"
             >

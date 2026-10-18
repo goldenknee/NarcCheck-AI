@@ -56,6 +56,8 @@ export default function RootLayout() {
                   <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
                   <Stack.Screen name="billing/success" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
                   <Stack.Screen name="billing/cancel" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                  <Stack.Screen name="legal/terms" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+                  <Stack.Screen name="legal/privacy" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
                 </Stack>
               </WebFrame>
             </SubscriptionProvider>
