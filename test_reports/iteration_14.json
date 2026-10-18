@@ -1,0 +1,34 @@
+{
+  "summary": "Backend-only verification of the Stripe TEST→LIVE key swap. 12/12 pytest cases pass (100%). Confirmed: (1) POST /api/billing/checkout plan=monthly returns 200 with a cs_live_ session_id and a Stripe-hosted URL on checkout.stripe.com (actual path observed is /f/pay/cs_live_... which is a valid Stripe hosted-checkout variant alongside /c/pay/ and /g/pay/; test accepts any path on checkout.stripe.com that contains cs_live_ and does NOT contain cs_test_). (2) plan=yearly returns 200 with a distinct cs_live_ session, URL contains cs_live_. (3) Session retrieved via Stripe SDK confirms livemode=True, billing_address_collection='auto', mode='subscription', metadata.{device_id,user_id,plan} preserved, client_reference_id==device_id, allow_promotion_codes=true, and the line_item price has livemode=True — so the LIVE price IDs are being used. (4) Backend startup logs confirm _PRICE_IDS populated with LIVE IDs: monthly=price_1URhgTIBA9UCVOAfjJI3qwZV, yearly=price_1URhgTIBA9UCVOAfh0twDzAC under new live product prod_VScwaFGOyi5S5L (different from the previous test-mode IDs prod_VScCaetY3ciCd3 / price_1URgxfIBA9UCVOAf*). (5) Full regression — /api/analyze (text), /api/transcribe multipart, /api/history POST+GET with X-Device-Id, /api/auth/apple + /api/auth/google invalid tokens → 4xx, /api/billing/status unknown device → 'inactive', /api/billing/verify bogus session_id → 404 — all pass. NO regressions from the key swap. Important note: tests only CREATE Checkout Sessions — they never complete payment, so no real money was charged.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_billing_stripe.py",
+    "/app/test_reports/pytest/iteration_14_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "billing.py handles live-mode seamlessly — ensure_products() ran against the live account at startup and created a fresh 'NarcCheck Pro' product + monthly ($8.99) + yearly ($60) recurring prices. The idempotent find-or-create logic correctly avoided duplicates on subsequent restarts.",
+    "STRIPE_WEBHOOK_SECRET is still empty in backend/.env (line 8). For PRODUCTION live mode, this MUST be set to a whsec_... from the Stripe Dashboard webhook endpoint so subscription.updated/deleted and invoice.payment_failed events are signature-verified. The current webhook handler accepts unsigned payloads when the secret is empty — safe only for dev. Flagging as a hardening item for main agent before public launch (not blocking checkout flow, but critical for cancellation + renewal tracking in production)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_billing_stripe.py — rewrote assertions to require cs_live_ (not cs_test_) in session_id + URL; added _is_live_checkout_url() helper that accepts any path on checkout.stripe.com containing cs_live_ (Stripe currently serves /f/pay/, /c/pay/, /g/pay/ variants for live sessions); added test_live_session_livemode_true_and_metadata_preserved which retrieves the session via Stripe SDK and asserts livemode=True, line_item price livemode=True, metadata preservation, billing_address_collection='auto'. Also added frontend/.env load for EXPO_PUBLIC_BACKEND_URL and switched test class name to TestBillingCheckoutLive."
+  ],
+  "success_rate": {
+    "backend": "100% (12/12)",
+    "frontend": "n/a (backend-only request)"
+  },
+  "seed_data_creation": "Transient Stripe LIVE Checkout Sessions were created during the run (cs_live_...). These were never completed (no card entered, no customer charged) and will auto-expire in Stripe. No persistent live-mode objects were created beyond the one-time NarcCheck Pro product + 2 recurring prices that ensure_products() set up at backend startup (prod_VScwaFGOyi5S5L, price_1URhgTIBA9UCVOAfjJI3qwZV monthly, price_1URhgTIBA9UCVOAfh0twDzAC yearly).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stripe is now in LIVE mode. The hosted checkout URL path currently resolves to /f/pay/cs_live_... on this account (not /c/pay/ which test mode used). This is a valid Stripe URL variant — do NOT regress to a strict /c/pay/ or /g/pay/ prefix assertion; use the _is_live_checkout_url() helper or simply assert cs_live_ is in the URL. STRIPE_WEBHOOK_SECRET is still unset — if main agent wires that up, re-run tests and additionally test POST /api/billing/webhook with a signed payload. Live price IDs: monthly=price_1URhgTIBA9UCVOAfjJI3qwZV, yearly=price_1URhgTIBA9UCVOAfh0twDzAC, product=prod_VScwaFGOyi5S5L. NEVER complete a checkout session in future tests — that would charge real money.",
+  "rca_of_issue": "n/a — this was a configuration-change verification (test→live Stripe key swap). All assertions pass. One intermediate test failure was observed and fixed in the test harness (not in product code): initial assertion assumed Stripe live URLs start with /c/pay/ or /g/pay/, but Stripe actually served /f/pay/cs_live_... for this account. Widened the matcher to accept any checkout.stripe.com path containing cs_live_."
+}

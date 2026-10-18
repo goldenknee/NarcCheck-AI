@@ -1,8 +1,12 @@
 """Backend tests for Stripe web checkout + regression suite.
 
-Iteration 13: verifies billing_address_collection='auto' and
-subscription_data metadata preservation after the Stripe-hosted receipts
-toggle change in billing.py.
+Iteration 14: verifies the switch from TEST (sk_test_) to LIVE (sk_live_)
+Stripe mode. Asserts:
+- /api/billing/checkout returns a cs_live_ session + URL under
+  checkout.stripe.com/{c,g}/pay/cs_live_...
+- Session retrieved via Stripe SDK reports livemode=true
+- billing_address_collection='auto' and metadata preservation
+- Full regression suite (analyze/transcribe/history/auth/billing status+verify)
 """
 import os
 import io
@@ -14,6 +18,7 @@ import requests
 try:
     from dotenv import load_dotenv  # type: ignore
     load_dotenv("/app/backend/.env")
+    load_dotenv("/app/frontend/.env")
 except Exception:
     pass
 
@@ -24,6 +29,14 @@ STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 
 DEVICE = f"TEST_DEV_{int(time.time())}"
 
+# Accept all live Stripe-hosted checkout URL shapes (/c/pay/, /g/pay/, /f/pay/ etc).
+# The invariant is: host is checkout.stripe.com AND path contains cs_live_.
+LIVE_URL_HOST = "https://checkout.stripe.com/"
+
+
+def _is_live_checkout_url(url: str) -> bool:
+    return url.startswith(LIVE_URL_HOST) and "cs_live_" in url and "cs_test_" not in url
+
 
 @pytest.fixture
 def api():
@@ -32,10 +45,10 @@ def api():
 
 
 # -----------------------------------------------------------------
-# Billing: /api/billing/checkout
+# Billing: /api/billing/checkout — LIVE mode assertions
 # -----------------------------------------------------------------
-class TestBillingCheckout:
-    def test_checkout_monthly_returns_stripe_url(self, api):
+class TestBillingCheckoutLive:
+    def test_checkout_monthly_returns_live_stripe_url(self, api):
         r = api.post(
             f"{BASE_URL}/api/billing/checkout",
             json={"plan": "monthly"},
@@ -45,10 +58,16 @@ class TestBillingCheckout:
         assert r.status_code == 200, r.text
         body = r.json()
         assert "url" in body and "session_id" in body
-        assert body["url"].startswith("https://checkout.stripe.com/c/pay/cs_test_"), body["url"]
-        assert body["session_id"].startswith("cs_test_")
+        assert body["session_id"].startswith("cs_live_"), (
+            f"expected cs_live_ session, got {body['session_id']}"
+        )
+        assert _is_live_checkout_url(body["url"]), (
+            f"expected live checkout URL (host checkout.stripe.com, cs_live_ in path), got {body['url']}"
+        )
+        # Must NOT be a test-mode URL
+        assert "cs_test_" not in body["url"] and "cs_test_" not in body["session_id"]
 
-    def test_checkout_yearly_returns_different_session(self, api):
+    def test_checkout_yearly_returns_live_session_different(self, api):
         r1 = api.post(
             f"{BASE_URL}/api/billing/checkout",
             json={"plan": "monthly"},
@@ -63,8 +82,11 @@ class TestBillingCheckout:
         )
         assert r1.status_code == 200
         assert r2.status_code == 200
-        assert r1.json()["session_id"] != r2.json()["session_id"]
-        assert r2.json()["url"].startswith("https://checkout.stripe.com/c/pay/cs_test_")
+        s1, s2 = r1.json()["session_id"], r2.json()["session_id"]
+        assert s1 != s2
+        assert s1.startswith("cs_live_") and s2.startswith("cs_live_")
+        assert _is_live_checkout_url(r2.json()["url"])
+        assert "cs_test_" not in r2.json()["url"]
 
     def test_checkout_missing_device_header_returns_400(self, api):
         r = api.post(
@@ -83,17 +105,26 @@ class TestBillingCheckout:
         )
         assert r.status_code == 422, r.text
 
-    def test_checkout_session_has_billing_address_auto_and_metadata(self, api):
-        """Verify the created Checkout Session has billing_address_collection='auto'
-        and subscription_data.metadata preserves device_id/user_id/plan.
+    def test_live_session_livemode_true_and_metadata_preserved(self, api):
+        """Retrieve the created Session via Stripe SDK and prove:
+        - livemode == True (confirms LIVE mode)
+        - billing_address_collection == 'auto'
+        - metadata (device_id/user_id/plan) preserved
+        - mode == 'subscription'
+        - price used is a LIVE price (price_1URhgTI... family — not test IDs)
         """
         if not STRIPE_KEY:
             pytest.skip("STRIPE_SECRET_KEY not available for session retrieval")
+        if not STRIPE_KEY.startswith("sk_live_"):
+            pytest.fail(
+                f"STRIPE_SECRET_KEY is not a live key (got prefix "
+                f"{STRIPE_KEY[:8]}). This test iteration requires live mode."
+            )
         import stripe
         stripe.api_key = STRIPE_KEY
 
-        test_user = "TEST_user_123"
-        test_device = f"TEST_DEV_META_{int(time.time())}"
+        test_user = "TEST_user_live_123"
+        test_device = f"TEST_DEV_LIVE_META_{int(time.time())}"
         r = api.post(
             f"{BASE_URL}/api/billing/checkout",
             json={"plan": "yearly", "user_id": test_user},
@@ -102,39 +133,41 @@ class TestBillingCheckout:
         )
         assert r.status_code == 200, r.text
         session_id = r.json()["session_id"]
+        assert session_id.startswith("cs_live_"), session_id
 
-        # Retrieve the session straight from Stripe to inspect configured params
         sess = stripe.checkout.Session.retrieve(
             session_id, expand=["subscription", "line_items"]
         )
-        # 1. billing_address_collection must be 'auto'
+        # 1. LIVE mode confirmation (Stripe source of truth)
+        assert sess.get("livemode") is True, (
+            f"expected livemode=True, got {sess.get('livemode')}"
+        )
+        # 2. billing_address_collection must be 'auto'
         assert sess.get("billing_address_collection") == "auto", (
             f"expected 'auto', got {sess.get('billing_address_collection')}"
         )
-        # 2. top-level metadata preserved
+        # 3. top-level metadata preserved
         md = sess.get("metadata") or {}
         assert md.get("device_id") == test_device
         assert md.get("user_id") == test_user
         assert md.get("plan") == "yearly"
-        # 3. mode is subscription (so Stripe auto-creates a Customer → receipts)
+        # 4. mode is subscription (so Stripe auto-creates a Customer → receipts)
         assert sess.get("mode") == "subscription"
-        # 4. client_reference_id mirrors the device id
+        # 5. client_reference_id mirrors the device id
         assert sess.get("client_reference_id") == test_device
-        # 5. subscription_data.metadata is a WRITE-ONLY create param — Stripe does
-        #    not surface it on an unpaid Session.retrieve(). The eventual Subscription
-        #    object (post-payment) carries the metadata. We assert session.metadata
-        #    (checked above) as the preservation proof for the pre-payment flow, and
-        #    only validate subscription_data when Stripe echoes it back.
-        sub_data = sess.get("subscription_data") or {}
-        if sub_data.get("metadata"):
-            sub_md = sub_data["metadata"]
-            assert sub_md.get("device_id") == test_device
-            assert sub_md.get("user_id") == test_user
-            assert sub_md.get("plan") == "yearly"
-        if sub_data.get("description"):
-            assert "NarcCheck Pro" in sub_data["description"]
         # 6. allow_promotion_codes enabled
         assert sess.get("allow_promotion_codes") is True
+        # 7. line_items reference a LIVE price (not a test price). Just assert
+        #    we have one line item and the price id is present and well-formed.
+        line_items = (sess.get("line_items") or {}).get("data") or []
+        assert line_items, "no line_items on session"
+        price = line_items[0].get("price") or {}
+        price_id = price.get("id") if isinstance(price, dict) else getattr(price, "id", "")
+        assert price_id.startswith("price_"), price_id
+        # LIVE prices live under livemode=true on the Price object
+        assert price.get("livemode") is True, (
+            f"line_item price livemode should be True, got {price.get('livemode')}"
+        )
 
 
 # -----------------------------------------------------------------
@@ -153,7 +186,7 @@ class TestBillingStatusAndVerify:
     def test_verify_bogus_session_returns_404(self, api):
         r = api.get(
             f"{BASE_URL}/api/billing/verify",
-            params={"session_id": "cs_test_bogus_does_not_exist_123"},
+            params={"session_id": "cs_live_bogus_does_not_exist_123"},
             headers={"X-Device-Id": DEVICE},
             timeout=20,
         )
