@@ -1,0 +1,51 @@
+{
+  "summary": "Destructive-cleanup verification after Stripe/web-app removal. BACKEND 12/12 PASSED. All /api/billing/* routes (checkout, status, portal, webhook) now return 404 as expected. All previously passing routes still work: GET /api/ (health), POST /api/analyze mode=text (GPT-5.4 returned valid scores), POST /api/analyze mode=text with no text → 400, POST /api/transcribe empty → 400, POST /api/transcribe bad audio → 502, GET+POST+DELETE /api/history with X-Device-Id (full CRUD verified), POST /api/auth/apple invalid token → 4xx, POST /api/auth/google invalid token → 4xx. Backend startup logs after `supervisorctl restart backend` show NO 'STRIPE' or 'Billing' log lines (only auth-router + uvicorn startup + the expected LiteLLM/analyze line). /app/_web-app-export/ exists and contains ALL 10 expected files (README.md, backend/billing.py, 2x legal/*.tsx, 2x billing/*.tsx, legal-page.tsx, web-frame.tsx, stripe-billing.ts, use-is-desktop.ts). FRONTEND renders cleanly at 390x844: Home shows NARCCHECK AI badge + Skip + FORENSIC ANALYSIS + 'See through the argument.' (verified via screenshot). /legal/terms renders with 'Terms of Service' title. /legal/privacy renders with 'Privacy Policy' title. /sign-in renders 'Apple Sign-In (iOS only)' button + 'By continuing, you agree to our Terms and Privacy Policy.' legal row. Zero bundler errors — no references to stripe-billing, web-frame, use-is-desktop, billing/success, or billing/cancel anywhere in the Expo console. ONE MINOR DIVERGENCE on /paywall: because EXPO_PUBLIC_REVENUECAT_* keys are blank, Purchases.logIn() fails which keeps identityBound=false permanently; the customerInfoQuery stays disabled and reports isLoading=true, so the paywall renders the <ActivityIndicator> loading spinner path (styles.plansLoading at line 184-187) plus the identityError banner 'Setting up secure payments… Please retry in a moment.' instead of the expected `testID='plans-unavailable'` + `testID='plans-restore'` fallback (which lives at lines 194-217, only reachable when isLoading becomes false AND packages.length===0). Still graceful — no crash, no red-screen, Restore button is reachable in the top-right header. All other review-request expectations are met.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "paywall.tsx",
+        "issue": "When RC keys are blank, isLoading stays true forever because customerInfoQuery is gated by identityBound which never flips to true (Purchases.logIn fails). Result: user sees an infinite ActivityIndicator spinner + 'Setting up secure payments…' identityError banner instead of the plans-unavailable fallback described in the review request. The plans-unavailable + plans-restore testIDs at paywall.tsx:195-217 are therefore unreachable on web preview with blank keys. Fix idea: when identityError is non-null, treat isLoading as false and fall through to the packages.length===0 branch so plans-unavailable + Restore Purchases button render. Reference: /app/frontend/app/paywall.tsx:184-217 and /app/frontend/src/lib/revenuecat.tsx:84-148.",
+        "testID": "plans-unavailable (not rendered)",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_17.json",
+    "/app/test_reports/pytest/iteration_17_results.xml",
+    "/app/backend/tests/test_billing_removed.py"
+  ],
+  "action_items": [
+    "OPTIONAL: Decide whether the paywall should surface the plans-unavailable/plans-restore fallback when identityError is set and RC keys are missing. Currently a spinner is shown indefinitely plus the retry banner. If the goal (per review_request) is the user sees 'Subscriptions loading' + Restore Purchases button, add `|| !!identityError` to the empty-packages branch or short-circuit isLoading on identityError. Does not block the iOS build — this only affects web preview with blank keys."
+  ],
+  "critical_code_review_comments": [
+    "server.py (lines 1-414): billing import + make_billing_router + ensure_billing_products are all removed cleanly. app.include_router only registers api_router and make_auth_router(db). No orphaned Stripe references.",
+    "backend/.env (5 lines): STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET removed. MONGO_URL, DB_NAME, EMERGENT_LLM_KEY, APPLE_AUDIENCES preserved. Zero comments. ✓",
+    "frontend/app/_layout.tsx: WebFrame import+wrap removed. billing/* Stack.Screen entries removed. legal/* Stack.Screen entries kept. ✓",
+    "frontend/app/paywall.tsx: Platform import, IS_WEB constant, startStripeCheckout import, WEB_* price constants all removed. Only remaining 'Stripe'/'billing' textual string is 'Recurring billing. Cancel anytime in your App Store settings.' (line 316) which is correct iOS-only copy. ✓",
+    "frontend/src/lib/revenuecat.tsx: fetchBillingStatus, stripeEntitlementQuery, stripeActive, refreshStripeEntitlement, and web short-circuits all removed. isSubscribed is now a pure RC entitlement check. ✓",
+    "frontend/app/sign-in.tsx: Apple fallback button renders on non-iOS (Platform.OS !== 'ios') with label 'Apple Sign-In (iOS only)'. Verified visible in web preview. ✓",
+    "frontend/src/components/voice-recorder.tsx: 'not available in browser preview' copy restored (no Stripe branching). ✓",
+    "Legal content in /app/frontend/app/legal/terms.tsx and privacy.tsx still mentions Stripe inside the user-facing policy text. This is INTENTIONAL and REQUIRED — those paragraphs disclose the (future) web payment processor to users for GDPR/App Store compliance. Not a code smell, not a leftover import.",
+    "No deprecated expo packages detected (uses expo-apple-authentication, expo-haptics, expo-linear-gradient, expo-router, expo-image, expo-image-picker, expo-document-picker — all current). No expo-av, expo-barcode-scanner, expo-background-fetch usage."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_billing_removed.py (NEW — 12 pytest cases)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 — 4 billing-404 + 5 core-API + 1 history-CRUD + 2 auth-invalid)",
+    "frontend": "95% (bundler clean, 5/5 routes render; paywall renders a spinner+retry banner instead of the plans-unavailable testID when RC keys are blank — see ui_bugs)"
+  },
+  "seed_data_creation": "One TEST_ history document inserted and soft-deleted during /api/history CRUD test (device_id prefix 'TEST_dev_<uuid>'). No residual data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite lives at /app/backend/tests/test_billing_removed.py — reuse it for future iterations. All billing endpoints should remain 404 permanently. If the main agent decides to patch paywall.tsx so that identityError short-circuits isLoading, retest by visiting /paywall at viewport 390x844 and asserting the testIDs 'plans-unavailable' and 'plans-restore' render AND clicking plans-restore triggers Purchases.restorePurchases(). RC keys in /app/frontend/.env are intentionally blank (user cleared them). Export dir /app/_web-app-export/ is complete — do not re-check unless main agent modifies it.",
+  "rca_of_issue": "Paywall spinner-vs-plans-unavailable divergence RCA: In /app/frontend/src/lib/revenuecat.tsx:84-91, customerInfoQuery.enabled = rcEnabled && identityBound. On web preview with blank RC keys, initializeRevenueCat → Purchases.configure throws 'RevenueCat public API keys not found', so when useRevenueCat's useEffect calls Purchases.logIn(id), it throws, setIdentityBound stays false, and identityError gets set. customerInfoQuery.isLoading in @tanstack/react-query v5 for a disabled query is actually true until a fetch occurs — but even if false, offeringsQuery is enabled and also throws, so offeringsQuery.isLoading flips briefly. Combined, hook returns isLoading=true early, then settles to isLoading=false with empty packages. The transient-to-settled transition on web is observed as a near-permanent spinner because the queries continuously retry on errors with the react-query default retry policy (3 retries, exponential backoff). Mitigation: either (a) set retry:false on both queries, or (b) treat identityError as 'loading complete, no plans' in paywall.tsx so the plans-unavailable branch renders. Neither is strictly required for the iOS App Store build (iOS uses real RC keys) but matches the review-request expectation."
+}

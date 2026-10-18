@@ -5,8 +5,6 @@ import type { CustomerInfo, PurchasesPackage } from "react-native-purchases";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 
-import { fetchBillingStatus } from "@/src/lib/stripe-billing";
-
 const REVENUECAT_TEST_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
 const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
 const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
@@ -29,9 +27,6 @@ function getRevenueCatApiKey(): string {
 
 export function initializeRevenueCat() {
   if (!rcEnabled) return;
-  // On web we use Stripe-hosted Checkout — skip RC init entirely rather than
-  // throwing "RevenueCat public API keys not found" into the console.
-  if (Platform.OS === "web") return;
   Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
   Purchases.configure({ apiKey: getRevenueCatApiKey() });
 }
@@ -141,27 +136,13 @@ function useSubscriptionContext() {
   const isSubscribed =
     customerInfoQuery.data?.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined;
 
-  // Stripe entitlement (web). Polled only on web; iOS relies on RevenueCat.
-  const stripeEntitlementQuery = useQuery({
-    queryKey: ["stripe", "entitlement"],
-    queryFn: fetchBillingStatus,
-    enabled: Platform.OS === "web",
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
-  });
-  const stripeActive = stripeEntitlementQuery.data?.status === "active";
-
   const originalAppUserId = customerInfoQuery.data?.originalAppUserId;
-  // On web we use Stripe-hosted Checkout — RC identity binding is irrelevant.
-  const identityReady =
-    Platform.OS === "web"
-      ? true
-      : !!originalAppUserId && !originalAppUserId.startsWith("$RCAnonymousID:");
+  const identityReady = !!originalAppUserId && !originalAppUserId.startsWith("$RCAnonymousID:");
 
   return {
     customerInfo: customerInfoQuery.data,
     offerings: offeringsQuery.data,
-    isSubscribed: isSubscribed || stripeActive,
+    isSubscribed,
     identityReady,
     identityError,
     isLoading: customerInfoQuery.isLoading || offeringsQuery.isLoading,
@@ -169,7 +150,6 @@ function useSubscriptionContext() {
     restore: restoreMutation.mutateAsync,
     isPurchasing: purchaseMutation.isPending,
     isRestoring: restoreMutation.isPending,
-    refreshStripeEntitlement: stripeEntitlementQuery.refetch,
   };
 }
 

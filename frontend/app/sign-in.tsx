@@ -99,11 +99,14 @@ export default function SignInScreen() {
             style={styles.appleBtn}
             onPress={doApple}
           />
-        ) : Platform.OS === "ios" ? (
+        ) : (
           <Pressable
             onPress={doApple}
-            disabled={busy !== null}
-            style={[styles.appleFallback, busy && { opacity: 0.5 }]}
+            disabled={Platform.OS !== "ios" || busy !== null}
+            style={[
+              styles.appleFallback,
+              (Platform.OS !== "ios" || busy) && { opacity: 0.5 },
+            ]}
             testID="apple-signin-fallback"
           >
             {busy === "apple" ? (
@@ -111,11 +114,13 @@ export default function SignInScreen() {
             ) : (
               <>
                 <Ionicons name="logo-apple" size={18} color={colors.onSurfaceInverse} />
-                <Text style={styles.appleFallbackText}>Sign in with Apple</Text>
+                <Text style={styles.appleFallbackText}>
+                  {Platform.OS === "ios" ? "Sign in with Apple" : "Apple Sign-In (iOS only)"}
+                </Text>
               </>
             )}
           </Pressable>
-        ) : null}
+        )}
 
         <Pressable
           onPress={doGoogle}
