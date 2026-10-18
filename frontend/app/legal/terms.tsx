@@ -126,11 +126,11 @@ export default function TermsScreen() {
 
       <Section heading="10. Governing law">
         <P>
-          These Terms are governed by the laws of the State of Delaware, USA, without regard to
-          its conflict-of-laws rules. Any dispute arising from these Terms will be resolved in
-          the state or federal courts located in New Castle County, Delaware, and you consent to
-          that jurisdiction. If you are a consumer resident in another jurisdiction, mandatory
-          consumer protections in your home jurisdiction still apply.
+          These Terms are governed by the laws of the State of Florida, USA, without regard to
+          its conflict-of-laws rules. Any dispute arising from these Terms will be resolved
+          exclusively in the state or federal courts located in the State of Florida, and you
+          consent to that jurisdiction and venue. If you are a consumer resident in another
+          jurisdiction, mandatory consumer protections in your home jurisdiction still apply.
         </P>
       </Section>
 

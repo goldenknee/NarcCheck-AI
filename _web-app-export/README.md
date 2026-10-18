@@ -207,13 +207,13 @@ Before shipping, edit the three constants at the top of
 `frontend/src/components/legal-page.tsx`:
 
 ```ts
-export const SUPPORT_EMAIL = "support@narccheckai.com";
+export const SUPPORT_EMAIL = "Goldenknee@gmail.com";
 export const COMPANY_NAME = "NarcCheck AI";
 export const LEGAL_EFFECTIVE_DATE = "October 2026";
 ```
 
-Also change the "Delaware" governing-law clause in `terms.tsx` section 10 if
-your legal entity is in a different jurisdiction.
+Governing-law in `terms.tsx` section 10 is set to **State of Florida** — change
+only if the business is incorporated elsewhere.
 
 ---
 

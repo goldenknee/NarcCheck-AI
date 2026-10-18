@@ -20,7 +20,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 import { colors, radius, spacing } from "@/src/theme";
 
-export const SUPPORT_EMAIL = "support@narccheckai.com";
+export const SUPPORT_EMAIL = "Goldenknee@gmail.com";
 export const COMPANY_NAME = "NarcCheck AI";
 // Keep in sync with the public launch date; shown at the top of each doc.
 export const LEGAL_EFFECTIVE_DATE = "October 2026";

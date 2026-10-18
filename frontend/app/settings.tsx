@@ -233,7 +233,7 @@ export default function SettingsScreen() {
             </Pressable>
             <View style={styles.hairline} />
             <Pressable
-              onPress={() => Linking.openURL("mailto:support@narccheckai.com").catch(() => {})}
+              onPress={() => Linking.openURL("mailto:Goldenknee@gmail.com").catch(() => {})}
               style={styles.rowBetween}
               testID="support-link"
             >
